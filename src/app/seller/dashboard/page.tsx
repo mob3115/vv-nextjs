@@ -6,16 +6,6 @@ import { SELLER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Seller Dashboard' }
 
-const SELLER_NAV = [
-  { href: '/seller/dashboard', label: 'Dashboard',      icon: '📊' },
-  { href: '/seller/listing',   label: 'My Listing',     icon: '🏢' },
-  { href: '/seller/discover',  label: 'Discover Buyers',icon: '🔍' },
-  { href: '/seller/interests', label: 'Buyer Interest', icon: '👁', badge: 0 },
-  { href: '/seller/vault',     label: 'Document Vault', icon: '🔒' },
-  { href: '/seller/chat',      label: 'Messages',       icon: '💬', badge: 0 },
-  { href: '/buyer/discover',   label: 'Buyer Mode',     icon: '↔' },
-]
-
 export default async function SellerDashboardPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -132,3 +122,4 @@ export default async function SellerDashboardPage() {
     </AppShell>
   )
 }
+
