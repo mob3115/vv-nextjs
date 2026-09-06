@@ -38,8 +38,8 @@ export default function LoginPage({
               </p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who sees what I see." cite="Seller — Manufacturing, 28 years" />
-              <BrandQuote text="I've spent my career building programs that move the needle. I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
+              <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who shares my values." cite="Seller — Manufacturing, 28 years" />
+              <BrandQuote text="I've spent my whole career building purpose driven organizations, I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
             </div>
             <div style={{ display: 'flex', gap: 28 }}>
               {[['847','Listings'],['312','Matches'],['94%','NDA Rate']].map(([val, lbl]) => (
@@ -105,8 +105,8 @@ export default function LoginPage({
         {/* Mobile-only brand content — scrollable below the card */}
         <div className="auth-mobile-brand" style={{ marginTop: 32, padding: '0 4px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-            <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who sees what I see." cite="Seller — Manufacturing, 28 years" />
-            <BrandQuote text="I've spent my career building programs that move the needle. I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
+            <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who shares my values." cite="Seller — Manufacturing, 28 years" />
+            <BrandQuote text="I've spent my whole career building purpose driven organizations, I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
           </div>
           <div style={{ display: 'flex', gap: 28, justifyContent: 'center' }}>
             {[['847','Listings'],['312','Matches'],['94%','NDA Rate']].map(([val, lbl]) => (
@@ -144,3 +144,4 @@ function BrandQuote({ text, cite }: { text: string; cite: string }) {
     </blockquote>
   )
 }
+
