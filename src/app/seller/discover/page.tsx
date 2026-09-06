@@ -15,29 +15,51 @@ export default async function SellerDiscoverPage() {
     .from('profiles').select('*').eq('id', user.id).single()
   if (!profile) redirect('/auth/login')
 
-  // Get this seller's listing
+  // Check seller has an active listing
   const { data: listing } = await supabase
     .from('seller_listings').select('id').eq('seller_id', user.id).single()
 
-  // Get buyers who haven't been swiped on yet
-  const { data: swipedIds } = await supabase
+  // Get buyer IDs this seller has already swiped on
+  const { data: swipedRows } = await supabase
     .from('swipes')
     .select('target_buyer_id')
     .eq('swiper_id', user.id)
     .not('target_buyer_id', 'is', null)
 
-  const excludeIds = (swipedIds ?? []).map((s: any) => s.target_buyer_id).filter(Boolean)
+  const excludeIds: string[] = (swipedRows ?? [])
+    .map((s: any) => s.target_buyer_id)
+    .filter(Boolean)
 
-  let query = supabase
-    .from('buyer_profiles')
-    .select('*, buyer:profiles!buyer_profiles_buyer_id_fkey(full_name, id)')
+  // Fetch all buyer profiles — query profiles table (no RLS restriction)
+  // then join buyer_profile data separately
+  const { data: allBuyers } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .in('role', ['buyer', 'dual'])
+    .neq('id', user.id)
+    .limit(50)
 
-  if (excludeIds.length > 0) {
-    query = (query as any).not('buyer_id', 'in', `(${excludeIds.join(',')})`)
-  }
+  // Filter out swiped buyers
+  const unseenBuyers = (allBuyers ?? []).filter(
+    (b: any) => !excludeIds.includes(b.id)
+  )
 
-  const { data: buyers } = await query.limit(20)
-  const list = buyers ?? []
+  // Fetch buyer profile details for those buyers
+  const buyerIds = unseenBuyers.map((b: any) => b.id)
+  const { data: buyerProfiles } = buyerIds.length > 0
+    ? await supabase
+        .from('buyer_profiles')
+        .select('*')
+        .in('buyer_id', buyerIds)
+    : { data: [] }
+
+  const profileMap = new Map((buyerProfiles ?? []).map((bp: any) => [bp.buyer_id, bp]))
+
+  // Merge profile + buyer_profile data
+  const list = unseenBuyers.map((b: any) => ({
+    ...b,
+    buyerProfile: profileMap.get(b.id) ?? null,
+  }))
 
   return (
     <AppShell profile={profile} navItems={SELLER_NAV} role="seller">
@@ -71,31 +93,43 @@ export default async function SellerDiscoverPage() {
           </div>
         ) : (
           <div style={{ maxWidth: 680 }}>
-            {list.map((buyer: any) => (
-              <div key={buyer.id} className="match-item">
-                <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1rem', flexShrink: 0 }}>
-                  {buyer.buyer?.full_name?.charAt(0) ?? 'B'}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
-                    {buyer.buyer?.full_name ?? 'Buyer'}
+            {list.map((buyer: any) => {
+              const bp = buyer.buyerProfile
+              return (
+                <div key={buyer.id} className="match-item">
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1rem', flexShrink: 0 }}>
+                    {buyer.full_name?.charAt(0) ?? 'B'}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#929292', marginTop: 2 }}>
-                    {buyer.location_preference} · {buyer.experience_years} experience · Budget: ${(buyer.price_min/1000).toFixed(0)}K–${(buyer.price_max/1000000).toFixed(1)}M
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
+                      {buyer.full_name}
+                    </div>
+                    {bp ? (
+                      <>
+                        <div style={{ fontSize: '0.75rem', color: '#929292', marginTop: 2 }}>
+                          {bp.location_preference} · {bp.experience_years} · ${(bp.price_min/1000).toFixed(0)}K–${(bp.price_max/1000000).toFixed(1)}M
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#6a6a6a', marginTop: 3 }}>
+                          {bp.target_industries?.slice(0,3).join(', ')}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: '#6a6a6a', marginTop: 2 }}>
+                        Profile not yet completed
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#6a6a6a', marginTop: 4 }}>
-                    {buyer.target_industries?.slice(0,3).join(', ')}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button className="btn-ghost btn-sm">Pass</button>
+                    <button className="btn-primary btn-sm">Connect</button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <button className="btn-ghost btn-sm">Pass</button>
-                  <button className="btn-primary btn-sm">Connect</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
     </AppShell>
   )
 }
+
