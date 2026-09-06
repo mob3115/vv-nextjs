@@ -7,7 +7,7 @@ import { enforceAnonymity } from '@/lib/utils'
 import type { SellerListingInput, BuyerProfileInput, NdaSignInput, SwipeInput } from '@/lib/validations'
 import type { ActionResult } from './auth'
 
-// ---- Get current user profile ----
+// ---- Require authenticated user or throw ----
 async function requireUser(supabase: ReturnType<typeof createClient>) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
@@ -15,60 +15,72 @@ async function requireUser(supabase: ReturnType<typeof createClient>) {
 }
 
 // ============================================================
-// LISTINGS
+// LISTINGS — Discover queue
 // ============================================================
 
 export async function getDiscoverListings() {
   const supabase = createClient()
   const user = await requireUser(supabase)
 
-  // Get listings buyer hasn't swiped on yet
-  const { data: swipedIds } = await supabase
+  // 1. IDs this buyer has already swiped on
+  const { data: swipedRows } = await supabase
     .from('swipes')
     .select('target_listing_id')
     .eq('swiper_id', user.id)
     .not('target_listing_id', 'is', null)
 
-  const excludeIds = (swipedIds ?? [])
-    .map(s => s.target_listing_id)
-    .filter(Boolean) as string[]
+  const excludeIds: string[] = (swipedRows ?? [])
+    .map((s: any) => s.target_listing_id)
+    .filter(Boolean)
 
-  let query = supabase
+  // 2. All active listings not owned by this user
+  const { data: allListings, error } = await supabase
     .from('seller_listings')
-    .select(`
-      *,
-      compatibility_scores(score)
-    `)
+    .select('*')
     .eq('status', 'active')
     .neq('seller_id', user.id)
-    .order('compatibility_scores(score)', { ascending: false })
-
-  if (excludeIds.length > 0) {
-    query = query.not('id', 'in', `(${excludeIds.join(',')})`)
-  }
-
-  const { data: listings, error } = await query
 
   if (error) {
     console.error('getDiscoverListings error:', error)
     return []
   }
 
-  // Get NDA status for each listing
-  const { data: ndas } = await supabase
+  // 3. Filter already-swiped in JS (avoids empty-array SQL edge cases)
+  const unseen = (allListings ?? []).filter(
+    (l: any) => !excludeIds.includes(l.id)
+  )
+
+  // 4. Compatibility scores for this buyer
+  const { data: scoreRows } = await supabase
+    .from('compatibility_scores')
+    .select('listing_id, score')
+    .eq('buyer_id', user.id)
+
+  const scoreMap = new Map(
+    (scoreRows ?? []).map((s: any) => [s.listing_id, s.score])
+  )
+
+  // 5. NDA status — determines anonymity level
+  const { data: ndaRows } = await supabase
     .from('ndas')
     .select('seller_id, status')
     .eq('buyer_id', user.id)
     .eq('status', 'signed')
 
-  const signedSellerIds = new Set((ndas ?? []).map(n => n.seller_id))
+  const signedSellerIds = new Set((ndaRows ?? []).map((n: any) => n.seller_id))
 
-  // Enforce anonymity server-side before returning to client
-  return (listings ?? []).map(listing => ({
-    ...enforceAnonymity(listing, signedSellerIds.has(listing.seller_id)),
-    compatibility_score: listing.compatibility_scores?.[0]?.score ?? 50,
-  }))
+  // 6. Apply anonymity, attach score, sort by score descending
+  return unseen
+    .map((listing: any) => ({
+      ...enforceAnonymity(listing, signedSellerIds.has(listing.seller_id)),
+      compatibility_score: scoreMap.get(listing.id) ?? 60,
+    }))
+    .sort((a: any, b: any) => b.compatibility_score - a.compatibility_score)
 }
+
+// ============================================================
+// SELLER LISTING — Create
+// ============================================================
 
 export async function createSellerListing(input: SellerListingInput): Promise<ActionResult> {
   const parsed = sellerListingSchema.safeParse(input)
@@ -78,8 +90,8 @@ export async function createSellerListing(input: SellerListingInput): Promise<Ac
 
   const supabase = createClient()
   const user = await requireUser(supabase)
-
   const d = parsed.data
+
   const { error } = await supabase.from('seller_listings').insert({
     seller_id: user.id,
     status: 'active',
@@ -116,7 +128,7 @@ export async function createSellerListing(input: SellerListingInput): Promise<Ac
 }
 
 // ============================================================
-// BUYER PROFILES
+// BUYER PROFILE — Upsert + Get
 // ============================================================
 
 export async function upsertBuyerProfile(input: BuyerProfileInput): Promise<ActionResult> {
@@ -153,73 +165,97 @@ export async function upsertBuyerProfile(input: BuyerProfileInput): Promise<Acti
 export async function getBuyerProfile() {
   const supabase = createClient()
   const user = await requireUser(supabase)
-
   const { data } = await supabase
     .from('buyer_profiles')
     .select('*')
     .eq('buyer_id', user.id)
     .single()
-
   return data
 }
 
 // ============================================================
-// SWIPES
+// SWIPES — Record a swipe and create a match if liked
+//
+// Design decision: a buyer "like" immediately creates a match
+// record with status='pending'. The match becomes 'mutual'
+// when the seller also likes back. This means My Matches shows
+// all listings the buyer has connected with, not just mutual ones.
 // ============================================================
 
-export async function recordSwipe(input: SwipeInput): Promise<ActionResult & { matched?: boolean }> {
+export async function recordSwipe(
+  input: SwipeInput
+): Promise<ActionResult & { matched?: boolean }> {
   const parsed = swipeSchema.safeParse(input)
   if (!parsed.success) return { error: 'Invalid swipe data' }
 
   const supabase = createClient()
   const user = await requireUser(supabase)
-  const d = parsed.data
+  const { targetListingId, targetBuyerId, direction } = parsed.data
 
-  // Insert swipe record
-  const { error } = await supabase.from('swipes').insert({
+  // 1. Record the swipe
+  const { error: swipeError } = await supabase.from('swipes').insert({
     swiper_id: user.id,
-    target_listing_id: d.targetListingId ?? null,
-    target_buyer_id: d.targetBuyerId ?? null,
-    direction: d.direction,
+    target_listing_id: targetListingId ?? null,
+    target_buyer_id: targetBuyerId ?? null,
+    direction,
   })
 
-  if (error) {
-    if (error.code === '23505') return { success: true } // duplicate swipe — ignore
+  if (swipeError) {
+    // Duplicate swipe — silently succeed (user already swiped this)
+    if (swipeError.code === '23505') return { success: true, matched: false }
+    console.error('recordSwipe error:', swipeError)
     return { error: 'Failed to record swipe' }
   }
 
-  // Check for mutual match (if buyer liked a listing)
-  if (d.direction === 'like' && d.targetListingId) {
+  // 2. If this is a buyer liking a listing — create a match record immediately
+  if (direction === 'like' && targetListingId) {
+    // Fetch the listing to get the seller's compatibility score
     const { data: listing } = await supabase
       .from('seller_listings')
       .select('seller_id')
-      .eq('id', d.targetListingId)
+      .eq('id', targetListingId)
       .single()
 
     if (listing) {
-      // Check if seller has also liked this buyer
+      // Get compatibility score
+      const { data: scoreRow } = await supabase
+        .from('compatibility_scores')
+        .select('score')
+        .eq('buyer_id', user.id)
+        .eq('listing_id', targetListingId)
+        .single()
+
+      const score = scoreRow?.score ?? 60
+
+      // Check if seller has already liked this buyer (mutual match)
       const { data: sellerSwipe } = await supabase
         .from('swipes')
         .select('id')
         .eq('swiper_id', listing.seller_id)
         .eq('target_buyer_id', user.id)
         .eq('direction', 'like')
-        .single()
+        .maybeSingle()
 
-      if (sellerSwipe) {
-        // Mutual match — create match and conversation
-        await supabase.from('matches').insert({
+      const isMutual = !!sellerSwipe
+
+      // Upsert match record — pending if one-sided, mutual if both swiped
+      const { error: matchError } = await supabase
+        .from('matches')
+        .upsert({
           buyer_id: user.id,
-          seller_id: d.targetListingId,
-          compatibility_score: 80, // fetched from compatibility_scores in prod
+          seller_id: targetListingId,
+          compatibility_score: score,
           buyer_liked: true,
-          seller_liked: true,
-          status: 'mutual',
-        })
+          seller_liked: isMutual,
+          status: isMutual ? 'mutual' : 'pending',
+        }, { onConflict: 'buyer_id,seller_id' })
 
-        revalidatePath('/buyer/matches')
-        return { success: true, matched: true }
+      if (matchError) {
+        console.error('match upsert error:', matchError)
       }
+
+      revalidatePath('/buyer/matches')
+      return { success: true, matched: isMutual }
     }
   }
 
@@ -227,7 +263,7 @@ export async function recordSwipe(input: SwipeInput): Promise<ActionResult & { m
 }
 
 // ============================================================
-// NDAs
+// NDAs — Sign and get
 // ============================================================
 
 export async function signNda(input: NdaSignInput): Promise<ActionResult> {
@@ -238,7 +274,7 @@ export async function signNda(input: NdaSignInput): Promise<ActionResult> {
   const user = await requireUser(supabase)
   const { signature, matchId } = parsed.data
 
-  // Verify user is party to this match
+  // Verify user is a party to this match
   const { data: match } = await supabase
     .from('matches')
     .select('*')
@@ -249,30 +285,26 @@ export async function signNda(input: NdaSignInput): Promise<ActionResult> {
   if (!match) return { error: 'Match not found or access denied.' }
 
   const isBuyer = match.buyer_id === user.id
-  const updateField = isBuyer
-    ? { buyer_signed_at: new Date().toISOString(), buyer_signature: signature }
-    : { seller_signed_at: new Date().toISOString(), seller_signature: signature }
+  const signedAtField = isBuyer ? 'buyer_signed_at' : 'seller_signed_at'
+  const signatureField = isBuyer ? 'buyer_signature' : 'seller_signature'
+
+  // Check if other party already signed
+  const otherSigned = isBuyer ? !!match.seller_signed_at : !!match.buyer_signed_at
+  const newStatus = otherSigned ? 'signed' : 'pending'
 
   // Upsert NDA record
-  const { data: nda } = await supabase
-    .from('ndas')
-    .select('*')
-    .eq('match_id', matchId)
-    .single()
+  const { error } = await supabase.from('ndas').upsert({
+    match_id: matchId,
+    buyer_id: match.buyer_id,
+    seller_id: match.seller_id,
+    [signedAtField]: new Date().toISOString(),
+    [signatureField]: signature,
+    status: newStatus,
+  }, { onConflict: 'match_id' })
 
-  if (nda) {
-    await supabase.from('ndas').update({
-      ...updateField,
-      status: nda.buyer_signed_at && nda.seller_signed_at ? 'signed' : 'pending',
-    }).eq('id', nda.id)
-  } else {
-    await supabase.from('ndas').insert({
-      match_id: matchId,
-      buyer_id: match.buyer_id,
-      seller_id: match.seller_id,
-      ...updateField,
-      status: 'pending',
-    })
+  if (error) {
+    console.error('signNda error:', error)
+    return { error: 'Failed to sign NDA. Please try again.' }
   }
 
   revalidatePath('/buyer/nda')
@@ -286,15 +318,9 @@ export async function getMatches() {
 
   const { data } = await supabase
     .from('matches')
-    .select(`
-      *,
-      seller_listings(*),
-      ndas(status, buyer_signed_at, seller_signed_at)
-    `)
+    .select(`*, seller_listings(*), ndas(status, buyer_signed_at, seller_signed_at)`)
     .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
     .order('created_at', { ascending: false })
 
   return data ?? []
 }
-
-
