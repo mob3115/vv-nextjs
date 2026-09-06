@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
+import { SELLER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Seller Dashboard' }
 
@@ -86,7 +87,7 @@ export default async function SellerDashboardPage() {
               <div className="card-sm">
                 <div className="text-xs uppercase tracking-widest text-grey-dark mb-1">Buyer Interest</div>
                 <div className="font-display text-3xl text-white">{matchCount ?? 0}</div>
-                <div className="text-xs text-grey-mid mt-1">Buyers who matched</div>
+                <a href="/seller/interests" className="text-xs mt-1" style={{ color: '#C46A00', textDecoration: 'none', display: 'block' }}>View interested buyers →</a>
               </div>
               <div className="card-sm">
                 <div className="text-xs uppercase tracking-widest text-grey-dark mb-1">Compatibility Avg.</div>
