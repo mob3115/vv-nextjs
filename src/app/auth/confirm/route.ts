@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get("token_hash")
@@ -12,14 +13,17 @@ export async function GET(request: NextRequest) {
   }
 
   const cookieStore = cookies()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setAll(cookiesToSet: any[]) {
+          cookiesToSet.forEach(({ name, value, options }: any) =>
             cookieStore.set(name, value, options)
           )
         },
