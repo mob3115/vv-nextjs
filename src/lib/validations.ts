@@ -35,7 +35,8 @@ export const sellerListingSchema = z.object({
   valuesStatement: z.string().min(50, 'Please write at least 50 characters').max(1000),
   transitionGoals: z.string().min(20, 'Please describe your goals').max(1000),
   transitionTimeline: z.string().min(1, 'Timeline is required'),
-  sellerFinancing: z.boolean(),`n  managementTraining: z.boolean().optional().default(false),
+  sellerFinancing: z.boolean(),
+  managementTraining: z.boolean().optional().default(false),
   anonymityLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   // Private fields (encrypted / hidden pre-NDA)
   ownerFirstName: z.string().min(1, 'First name is required'),
@@ -80,4 +81,3 @@ export type SellerListingInput = z.infer<typeof sellerListingSchema>
 export type BuyerProfileInput = z.infer<typeof buyerProfileSchema>
 export type NdaSignInput = z.infer<typeof ndaSignSchema>
 export type SwipeInput = z.infer<typeof swipeSchema>
-
