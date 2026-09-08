@@ -288,21 +288,21 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
               <div style={{ padding: '10px 18px', borderTop: '1px solid #2e2e2e', background: '#141414', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.75rem', color: '#929292' }}>{current.industry}</span>
                 <span style={{ fontSize: '0.75rem', color: '#C46A00', fontWeight: 600 }}>Ask: {current.asking_range}</span>
-            </div>
-            {(current.seller_financing || (current as any).management_training) && (
-              <div style={{ padding: '6px 18px 8px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {current.seller_financing && (
-                  <span style={{ fontSize: '0.68rem', background: 'rgba(76,175,125,0.1)', color: '#4caf7d', border: '1px solid rgba(76,175,125,0.25)', padding: '2px 8px', borderRadius: 99 }}>
-                    ✓ Seller Financing
-                  </span>
-                )}
-                {(current as any).management_training && (
-                  <span style={{ fontSize: '0.68rem', background: 'rgba(160,85,0,0.1)', color: '#C46A00', border: '1px solid rgba(160,85,0,0.3)', padding: '2px 8px', borderRadius: 99 }}>
-                    ✓ Management Training Path
-                  </span>
-                )}
               </div>
-              </div>
+              {(current.seller_financing || (current as any).management_training) && (
+                <div style={{ padding: '6px 18px 8px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {current.seller_financing && (
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(76,175,125,0.1)', color: '#4caf7d', border: '1px solid rgba(76,175,125,0.25)', padding: '2px 8px', borderRadius: 99 }}>
+                      ✓ Seller Financing
+                    </span>
+                  )}
+                  {(current as any).management_training && (
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(160,85,0,0.1)', color: '#C46A00', border: '1px solid rgba(160,85,0,0.3)', padding: '2px 8px', borderRadius: 99 }}>
+                      ✓ Management Training Path
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Overlays */}
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(76,175,125,0.22)', color: '#4caf7d', opacity: overlayState === 'like' ? overlayOpacity : 0, transition: 'opacity 0.08s' }}>CONNECT</div>
