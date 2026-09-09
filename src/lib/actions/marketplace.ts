@@ -175,13 +175,43 @@ export async function getBuyerProfile() {
 }
 
 // ============================================================
-// SWIPES — Record a swipe and create a match if liked
+// SWIPES — Record a swipe and create/update a match if liked
 //
-// Design decision: a buyer "like" immediately creates a match
-// record with status='pending'. The match becomes 'mutual'
-// when the seller also likes back. This means My Matches shows
-// all listings the buyer has connected with, not just mutual ones.
+// Design decision: a buyer "like" immediately creates a match record
+// with status='pending' — this is what makes a listing show up in the
+// buyer's My Matches. A seller "like" never creates that record by
+// itself (a seller liking a buyer who has never touched the listing
+// shouldn't manufacture a "connection" on the buyer's side); it just
+// gets saved as a swipe, and flips an already-existing match to
+// 'mutual' if the buyer has liked too.
+//
+// Both branches re-read *both* sides' swipe rows fresh via
+// getMatchState() every time either side likes, so it never matters
+// who liked first — a late like on either side self-corrects the
+// match instead of needing separate "catch-up" logic.
 // ============================================================
+
+async function getMatchState(
+  supabase: ReturnType<typeof createClient>,
+  buyerId: string,
+  listingId: string,
+  sellerId: string
+) {
+  const [{ data: buyerSwipe }, { data: sellerSwipe }, { data: scoreRow }] = await Promise.all([
+    supabase.from('swipes').select('id')
+      .eq('swiper_id', buyerId).eq('target_listing_id', listingId).eq('direction', 'like').maybeSingle(),
+    supabase.from('swipes').select('id')
+      .eq('swiper_id', sellerId).eq('target_buyer_id', buyerId).eq('direction', 'like').maybeSingle(),
+    supabase.from('compatibility_scores').select('score')
+      .eq('buyer_id', buyerId).eq('listing_id', listingId).maybeSingle(),
+  ])
+
+  return {
+    buyerLiked: !!buyerSwipe,
+    sellerLiked: !!sellerSwipe,
+    score: scoreRow?.score ?? 60,
+  }
+}
 
 export async function recordSwipe(
   input: SwipeInput
@@ -208,56 +238,69 @@ export async function recordSwipe(
     return { error: 'Failed to record swipe' }
   }
 
-  // 2. If this is a buyer liking a listing — create a match record immediately
-  if (direction === 'like' && targetListingId) {
-    // Fetch the listing to get the seller's compatibility score
+  if (direction !== 'like') return { success: true, matched: false }
+
+  // 2a. Buyer liking a listing — create or update the match record
+  if (targetListingId) {
     const { data: listing } = await supabase
       .from('seller_listings')
       .select('seller_id')
       .eq('id', targetListingId)
       .single()
 
-    if (listing) {
-      // Get compatibility score
-      const { data: scoreRow } = await supabase
-        .from('compatibility_scores')
-        .select('score')
-        .eq('buyer_id', user.id)
-        .eq('listing_id', targetListingId)
-        .single()
+    if (!listing) return { success: true, matched: false }
 
-      const score = scoreRow?.score ?? 60
+    const { buyerLiked, sellerLiked, score } = await getMatchState(
+      supabase, user.id, targetListingId, listing.seller_id
+    )
+    const isMutual = buyerLiked && sellerLiked
 
-      // Check if seller has already liked this buyer (mutual match)
-      const { data: sellerSwipe } = await supabase
-        .from('swipes')
-        .select('id')
-        .eq('swiper_id', listing.seller_id)
-        .eq('target_buyer_id', user.id)
-        .eq('direction', 'like')
-        .maybeSingle()
+    const { error: matchError } = await supabase
+      .from('matches')
+      .upsert({
+        buyer_id: user.id,
+        seller_id: targetListingId,
+        compatibility_score: score,
+        buyer_liked: buyerLiked,
+        seller_liked: sellerLiked,
+        status: isMutual ? 'mutual' : 'pending',
+      }, { onConflict: 'buyer_id,seller_id' })
 
-      const isMutual = !!sellerSwipe
+    if (matchError) console.error('match upsert error:', matchError)
 
-      // Upsert match record — pending if one-sided, mutual if both swiped
-      const { error: matchError } = await supabase
-        .from('matches')
-        .upsert({
-          buyer_id: user.id,
-          seller_id: targetListingId,
-          compatibility_score: score,
-          buyer_liked: true,
-          seller_liked: isMutual,
-          status: isMutual ? 'mutual' : 'pending',
-        }, { onConflict: 'buyer_id,seller_id' })
+    revalidatePath('/buyer/matches')
+    revalidatePath('/seller/interests')
+    return { success: true, matched: isMutual }
+  }
 
-      if (matchError) {
-        console.error('match upsert error:', matchError)
-      }
+  // 2b. Seller liking a buyer — flip the buyer's existing match to mutual.
+  // No match exists yet if the buyer hasn't liked back; in that case the
+  // swipe above is all there is to save for now (see design note above).
+  if (targetBuyerId) {
+    const { data: listing } = await supabase
+      .from('seller_listings')
+      .select('id')
+      .eq('seller_id', user.id)
+      .single()
 
-      revalidatePath('/buyer/matches')
-      return { success: true, matched: isMutual }
-    }
+    if (!listing) return { success: true, matched: false }
+
+    const { buyerLiked, sellerLiked } = await getMatchState(
+      supabase, targetBuyerId, listing.id, user.id
+    )
+    if (!buyerLiked) return { success: true, matched: false }
+
+    const { error: matchError } = await supabase
+      .from('matches')
+      .update({ seller_liked: sellerLiked, status: sellerLiked ? 'mutual' : 'pending' })
+      .eq('buyer_id', targetBuyerId)
+      .eq('seller_id', listing.id)
+
+    if (matchError) console.error('match update error:', matchError)
+
+    revalidatePath('/seller/interests')
+    revalidatePath('/buyer/matches')
+    return { success: true, matched: sellerLiked }
   }
 
   return { success: true, matched: false }
@@ -317,10 +360,22 @@ export async function getMatches() {
   const supabase = createClient()
   const user = await requireUser(supabase)
 
+  // matches.seller_id references seller_listings.id, not a user — resolve
+  // this user's own listing (if any) before filtering as a potential seller.
+  const { data: listing } = await supabase
+    .from('seller_listings')
+    .select('id')
+    .eq('seller_id', user.id)
+    .maybeSingle()
+
+  const filter = listing
+    ? `buyer_id.eq.${user.id},seller_id.eq.${listing.id}`
+    : `buyer_id.eq.${user.id}`
+
   const { data } = await supabase
     .from('matches')
     .select(`*, seller_listings(*), ndas(status, buyer_signed_at, seller_signed_at)`)
-    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+    .or(filter)
     .order('created_at', { ascending: false })
 
   return data ?? []
