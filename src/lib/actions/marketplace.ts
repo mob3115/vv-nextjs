@@ -285,13 +285,27 @@ export async function recordSwipe(
     )
     if (!buyerLiked) return { success: true, matched: false }
 
-    const { error: matchError } = await supabase
+    // .select() here is load-bearing: without it, an UPDATE that Postgres
+    // RLS silently filters down to 0 matched rows still comes back with
+    // error === null — a real failure would otherwise be reported as
+    // success. Requires the "Parties can update own matches" RLS policy
+    // (migration 002) to actually be applied.
+    const { data: updatedRows, error: matchError } = await supabase
       .from('matches')
       .update({ seller_liked: sellerLiked, status: sellerLiked ? 'mutual' : 'pending' })
       .eq('buyer_id', targetBuyerId)
       .eq('seller_id', listing.id)
+      .select('id')
 
-    if (matchError) console.error('match update error:', matchError)
+    if (matchError) {
+      console.error('match update error:', matchError)
+      return { error: 'Failed to connect. Please try again.' }
+    }
+    if (!updatedRows || updatedRows.length === 0) {
+      console.error('match update affected 0 rows for buyer', targetBuyerId, 'listing', listing.id,
+        '— check that migration 002 (matches UPDATE policy) has been applied.')
+      return { error: 'Could not connect right now. Please try again in a moment.' }
+    }
 
     revalidatePath('/seller/interests')
     revalidatePath('/buyer/matches')
