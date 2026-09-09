@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { recordSwipe } from '@/lib/actions/marketplace'
 
 interface BuyerCard {
   id: string
@@ -74,16 +75,19 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
       card.style.opacity = '0'
     }
 
-    if (direction === 'connect') {
-      toast.success(`Connection request sent to ${buyer.full_name}!`)
-    }
+    // Fire and forget — don't block the UI
+    recordSwipe({ targetBuyerId: buyer.id, direction: direction === 'connect' ? 'like' : 'pass' })
+      .then(result => {
+        if (result.matched)           toast.success(`It's a match with ${buyer.full_name}!`)
+        else if (direction === 'connect') toast.success(`Connection request sent to ${buyer.full_name}!`)
+        router.refresh()
+      })
+      .catch(() => toast.error('Something went wrong'))
 
     setTimeout(() => {
       setQueue(q => q.slice(1))
       setSwiping(false)
     }, 290)
-
-    router.refresh()
   }, [swiping, router])
 
   // Touch handlers
