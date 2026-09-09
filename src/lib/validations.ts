@@ -65,7 +65,11 @@ export const buyerProfileSchema = z.object({
 })
 
 export const ndaSignSchema = z.object({
-  signature: z.string().min(2, 'Please type your full legal name'),
+  signature: z.string().min(2, 'Please type your full legal name').max(200),
+  initials: z
+    .string()
+    .min(1, 'Please add your initials')
+    .max(8, 'Initials should be a few letters, not your full name'),
   matchId: z.string().uuid(),
 })
 
@@ -75,9 +79,19 @@ export const swipeSchema = z.object({
   direction: z.enum(['like', 'pass']),
 })
 
+export const messageSchema = z.object({
+  matchId: z.string().uuid(),
+  content: z
+    .string()
+    .trim()
+    .min(1, 'Message cannot be empty')
+    .max(4000, 'Message is too long (4000 character limit)'),
+})
+
 export type RegisterInput = z.infer<typeof registerSchema>
 export type LoginInput = z.infer<typeof loginSchema>
 export type SellerListingInput = z.infer<typeof sellerListingSchema>
 export type BuyerProfileInput = z.infer<typeof buyerProfileSchema>
 export type NdaSignInput = z.infer<typeof ndaSignSchema>
 export type SwipeInput = z.infer<typeof swipeSchema>
+export type MessageInput = z.infer<typeof messageSchema>

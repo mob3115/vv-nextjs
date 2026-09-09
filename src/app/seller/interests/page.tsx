@@ -102,10 +102,13 @@ export default async function SellerInterestsPage() {
                           <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.3rem', color: match.compatibility_score >= 85 ? '#4caf7d' : '#C46A00' }}>
                             {match.compatibility_score}
                           </div>
-                          {ndaSigned
-                            ? <span className="badge-green">NDA ✓</span>
-                            : <span className="badge-warning">NDA Pending</span>
-                          }
+                          {ndaSigned ? (
+                            <span className="badge-green">NDA ✓</span>
+                          ) : match.status === 'mutual' ? (
+                            <a href={`/seller/nda/${match.id}`} className="badge-warning" style={{ textDecoration: 'none' }}>NDA Pending</a>
+                          ) : (
+                            <span className="badge-grey">Not yet mutual</span>
+                          )}
                         </div>
                       </div>
 
@@ -137,10 +140,16 @@ export default async function SellerInterestsPage() {
 
                       {/* Actions */}
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                        {ndaSigned
-                          ? <a href="/seller/chat" className="btn-primary btn-sm">Open Chat →</a>
-                          : <button className="btn-ghost btn-sm">Request NDA</button>
-                        }
+                        {match.status === 'mutual' ? (
+                          <>
+                            <a href={`/seller/chat/${match.id}`} className="btn-primary btn-sm">Open Chat →</a>
+                            {!ndaSigned && <a href={`/seller/nda/${match.id}`} className="btn-ghost btn-sm">Request NDA</a>}
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: '#6a6a6a', alignSelf: 'center' }}>
+                            Connect back with this buyer to unlock messaging
+                          </span>
+                        )}
                         <button className="btn-ghost btn-sm">Pass</button>
                       </div>
                     </div>
