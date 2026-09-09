@@ -15,13 +15,22 @@ export default async function BuyerNdaPage() {
     .from('profiles').select('*').eq('id', user.id).single()
   if (!profile) redirect('/auth/login')
 
-  const { data: ndas } = await supabase
-    .from('ndas')
-    .select(`*, matches(compatibility_score, seller_listings(industry, asking_range, revenue_band, location_region))`)
+  // Query from matches (not ndas) so a mutual match shows up here even
+  // before anyone has started the NDA — an ndas row only exists once one
+  // side has actually signed.
+  const { data: matches } = await supabase
+    .from('matches')
+    .select(`id, compatibility_score, seller_listings(industry, asking_range, revenue_band, location_region), ndas(status)`)
     .eq('buyer_id', user.id)
+    .eq('status', 'mutual')
     .order('created_at', { ascending: false })
 
-  const list = ndas ?? []
+  const list = (matches ?? []).map((m: any) => ({
+    matchId: m.id as string,
+    compatibilityScore: m.compatibility_score,
+    listing: m.seller_listings,
+    status: (Array.isArray(m.ndas) ? m.ndas[0]?.status : m.ndas?.status) ?? 'not_started',
+  }))
 
   return (
     <AppShell profile={profile} navItems={BUYER_NAV} role="buyer">
@@ -46,32 +55,36 @@ export default async function BuyerNdaPage() {
           </div>
         ) : (
           <div style={{ maxWidth: 700 }}>
-            {list.map((nda: any) => {
-              const listing = nda.matches?.seller_listings
-              return (
-                <div key={nda.id} className="card" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
-                      {listing?.industry ?? 'Business'} · {listing?.location_region}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#929292', marginTop: 4 }}>
-                      Ask: {listing?.asking_range} · Revenue: {listing?.revenue_band}
-                    </div>
+            {list.map(row => (
+              <div key={row.matchId} className="card" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
+                    {row.listing?.industry ?? 'Business'} · {row.listing?.location_region}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                    {nda.status === 'signed'
-                      ? <span className="badge-green">✓ Signed</span>
-                      : <span className="badge-warning">Pending</span>
-                    }
-                    {nda.status === 'signed' && (
-                      <button className="btn-ghost btn-sm" style={{ fontSize: '0.75rem' }}>
-                        Open Vault →
-                      </button>
-                    )}
+                  <div style={{ fontSize: '0.75rem', color: '#929292', marginTop: 4 }}>
+                    Ask: {row.listing?.asking_range} · Revenue: {row.listing?.revenue_band}
                   </div>
                 </div>
-              )
-            })}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  {row.status === 'signed' ? (
+                    <span className="badge-green">✓ Signed</span>
+                  ) : row.status === 'pending' ? (
+                    <span className="badge-warning">Pending</span>
+                  ) : (
+                    <span className="badge-grey">Not started</span>
+                  )}
+                  {row.status === 'signed' ? (
+                    <button className="btn-ghost btn-sm" style={{ fontSize: '0.75rem' }}>
+                      Open Vault →
+                    </button>
+                  ) : (
+                    <a href={`/buyer/nda/${row.matchId}`} className="btn-primary btn-sm" style={{ fontSize: '0.75rem', textDecoration: 'none' }}>
+                      Review & Sign →
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

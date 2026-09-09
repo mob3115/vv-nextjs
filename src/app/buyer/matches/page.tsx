@@ -89,8 +89,13 @@ export default async function BuyerMatchesPage() {
                     </div>
                     {ndaSigned
                       ? <span className="badge-green">NDA ✓</span>
-                      : <a href="/buyer/nda" className="badge-warning" style={{ textDecoration: 'none' }}>Sign NDA</a>
+                      : <a href={`/buyer/nda/${match.id}`} className="badge-warning" style={{ textDecoration: 'none' }}>Sign NDA</a>
                     }
+                    {match.status === 'mutual' ? (
+                      <a href={`/buyer/chat/${match.id}`} className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>Message →</a>
+                    ) : (
+                      <span style={{ fontSize: '0.7rem', color: '#6a6a6a' }}>Awaiting seller</span>
+                    )}
                   </div>
                 </div>
               )

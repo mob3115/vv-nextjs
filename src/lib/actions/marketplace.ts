@@ -4,15 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { sellerListingSchema, buyerProfileSchema, ndaSignSchema, swipeSchema } from '@/lib/validations'
 import { enforceAnonymity } from '@/lib/utils'
+import { NDA_TEMPLATE_VERSION } from '@/lib/nda-template'
+import { requireUser, resolveMatchParty } from './shared'
 import type { SellerListingInput, BuyerProfileInput, NdaSignInput, SwipeInput } from '@/lib/validations'
 import type { ActionResult } from './auth'
-
-// ---- Require authenticated user or throw ----
-async function requireUser(supabase: ReturnType<typeof createClient>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-  return user
-}
 
 // ============================================================
 // LISTINGS — Discover queue
@@ -316,35 +311,44 @@ export async function signNda(input: NdaSignInput): Promise<ActionResult> {
 
   const supabase = createClient()
   const user = await requireUser(supabase)
-  const { signature, matchId } = parsed.data
+  const { signature, initials, matchId } = parsed.data
 
-  // Verify user is a party to this match
-  const { data: match } = await supabase
-    .from('matches')
-    .select('*')
-    .eq('id', matchId)
-    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-    .single()
+  const party = await resolveMatchParty(supabase, user.id, matchId)
+  if (!party) return { error: 'Match not found or access denied.' }
+  const { match, sellerUserId, isBuyer } = party
 
-  if (!match) return { error: 'Match not found or access denied.' }
+  if (match.status !== 'mutual') {
+    return { error: 'This match must be mutual before an NDA can be signed.' }
+  }
 
-  const isBuyer = match.buyer_id === user.id
-  const signedAtField = isBuyer ? 'buyer_signed_at' : 'seller_signed_at'
-  const signatureField = isBuyer ? 'buyer_signature' : 'seller_signature'
+  const { data: existingNda } = await supabase
+    .from('ndas')
+    .select('buyer_signed_at, seller_signed_at')
+    .eq('match_id', matchId)
+    .maybeSingle()
 
-  // Check if other party already signed
-  const otherSigned = isBuyer ? !!match.seller_signed_at : !!match.buyer_signed_at
+  // Check if the other party already signed
+  const otherSigned = isBuyer ? !!existingNda?.seller_signed_at : !!existingNda?.buyer_signed_at
   const newStatus = otherSigned ? 'signed' : 'pending'
 
-  // Upsert NDA record
-  const { error } = await supabase.from('ndas').upsert({
+  const payload: Record<string, unknown> = {
     match_id: matchId,
     buyer_id: match.buyer_id,
-    seller_id: match.seller_id,
-    [signedAtField]: new Date().toISOString(),
-    [signatureField]: signature,
+    seller_id: sellerUserId, // ndas.seller_id is a real user id, unlike matches.seller_id
     status: newStatus,
-  }, { onConflict: 'match_id' })
+    template_version: NDA_TEMPLATE_VERSION,
+  }
+  if (isBuyer) {
+    payload.buyer_signed_at = new Date().toISOString()
+    payload.buyer_signature = signature
+    payload.buyer_initials = initials
+  } else {
+    payload.seller_signed_at = new Date().toISOString()
+    payload.seller_signature = signature
+    payload.seller_initials = initials
+  }
+
+  const { error } = await supabase.from('ndas').upsert(payload, { onConflict: 'match_id' })
 
   if (error) {
     console.error('signNda error:', error)
@@ -353,7 +357,37 @@ export async function signNda(input: NdaSignInput): Promise<ActionResult> {
 
   revalidatePath('/buyer/nda')
   revalidatePath('/seller/interests')
+  revalidatePath(`/buyer/chat/${matchId}`)
+  revalidatePath(`/seller/chat/${matchId}`)
   return { success: true }
+}
+
+// Everything the NDA sign page needs: names + listing context to render the
+// agreement text, plus any existing signature state for this match.
+export async function getNdaSignContext(matchId: string) {
+  const supabase = createClient()
+  const user = await requireUser(supabase)
+
+  const party = await resolveMatchParty(supabase, user.id, matchId)
+  if (!party) return null
+  const { match, sellerUserId, isBuyer } = party
+
+  const [{ data: buyerProfile }, { data: sellerProfile }, { data: nda }] = await Promise.all([
+    supabase.from('profiles').select('full_name').eq('id', match.buyer_id).single(),
+    supabase.from('profiles').select('full_name').eq('id', sellerUserId).single(),
+    supabase.from('ndas').select('*').eq('match_id', matchId).maybeSingle(),
+  ])
+
+  return {
+    matchId,
+    isBuyer,
+    matchStatus: match.status as 'pending' | 'mutual' | 'expired',
+    industry: match.seller_listings.industry as string,
+    locationRegion: match.seller_listings.location_region as string,
+    buyerName: buyerProfile?.full_name ?? 'Buyer',
+    sellerName: sellerProfile?.full_name ?? 'Seller',
+    nda: nda ?? null,
+  }
 }
 
 export async function getMatches() {
