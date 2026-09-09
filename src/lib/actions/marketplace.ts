@@ -237,13 +237,17 @@ export async function recordSwipe(
 
   // 2a. Buyer liking a listing — create or update the match record
   if (targetListingId) {
-    const { data: listing } = await supabase
+    const { data: listing, error: listingError } = await supabase
       .from('seller_listings')
       .select('seller_id')
       .eq('id', targetListingId)
-      .single()
+      .maybeSingle()
 
-    if (!listing) return { success: true, matched: false }
+    if (listingError) {
+      console.error('listing lookup error:', listingError)
+      return { error: 'Failed to record swipe. Please try again.' }
+    }
+    if (!listing) return { success: true, matched: false } // listing no longer exists — nothing to match against
 
     const { buyerLiked, sellerLiked, score } = await getMatchState(
       supabase, user.id, targetListingId, listing.seller_id
@@ -272,17 +276,23 @@ export async function recordSwipe(
   // No match exists yet if the buyer hasn't liked back; in that case the
   // swipe above is all there is to save for now (see design note above).
   if (targetBuyerId) {
-    const { data: listing } = await supabase
+    const { data: listing, error: listingError } = await supabase
       .from('seller_listings')
       .select('id')
       .eq('seller_id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (!listing) return { success: true, matched: false }
+    if (listingError) {
+      console.error('seller listing lookup error:', listingError)
+      return { error: 'Failed to record swipe. Please try again.' }
+    }
+    if (!listing) return { success: true, matched: false } // no listing — nothing to connect against
 
     const { buyerLiked, sellerLiked } = await getMatchState(
       supabase, targetBuyerId, listing.id, user.id
     )
+    // Legitimate no-op when a seller likes a buyer through Discover Buyers who
+    // hasn't liked this listing back yet — nothing to flip to mutual yet.
     if (!buyerLiked) return { success: true, matched: false }
 
     // .select() here is load-bearing: without it, an UPDATE that Postgres
