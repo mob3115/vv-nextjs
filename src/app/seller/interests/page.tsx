@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
+import { recordSwipe } from '@/lib/actions/marketplace'
 import { SELLER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Buyer Interest' }
@@ -146,9 +147,11 @@ export default async function SellerInterestsPage() {
                             {!ndaSigned && <a href={`/seller/nda/${match.id}`} className="btn-ghost btn-sm">Request NDA</a>}
                           </>
                         ) : (
-                          <span style={{ fontSize: '0.75rem', color: '#6a6a6a', alignSelf: 'center' }}>
-                            Connect back with this buyer to unlock messaging
-                          </span>
+                          <form action={recordSwipe.bind(null, { targetBuyerId: match.buyer_id, direction: 'like' })}>
+                            <button type="submit" className="btn-primary btn-sm">
+                              Connect → Unlock Messaging
+                            </button>
+                          </form>
                         )}
                         <button className="btn-ghost btn-sm">Pass</button>
                       </div>
