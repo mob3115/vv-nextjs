@@ -4,6 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { recordSwipe } from '@/lib/actions/marketplace'
+import { Confetti } from '@/components/shared/Confetti'
+import { SWIPE_ICONS, MISC_ICONS } from '@/lib/icons'
 
 interface BuyerCard {
   id: string
@@ -39,6 +41,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
   const [swiping, setSwiping] = useState(false)
   const [overlayState, setOverlayState] = useState<'connect' | 'pass' | null>(null)
   const [overlayOpacity, setOverlayOpacity] = useState(0)
+  const [celebrate, setCelebrate] = useState(0)
   const cardRef = useRef<HTMLDivElement>(null)
   const startX = useRef(0)
   const startY = useRef(0)
@@ -78,8 +81,12 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
     // Fire and forget — don't block the UI
     recordSwipe({ targetBuyerId: buyer.id, direction: direction === 'connect' ? 'like' : 'pass' })
       .then(result => {
-        if (result.matched)           toast.success(`It's a match with ${buyer.full_name}!`)
-        else if (direction === 'connect') toast.success(`Connection request sent to ${buyer.full_name}!`)
+        if (result.matched) {
+          toast.success(`It's a match with ${buyer.full_name}!`)
+          setCelebrate(c => c + 1)
+        } else if (direction === 'connect') {
+          toast.success(`Connection request sent to ${buyer.full_name}!`)
+        }
         router.refresh()
       })
       .catch(() => toast.error('Something went wrong'))
@@ -194,7 +201,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 14, opacity: 0.4 }}>◎</div>
+          <MISC_ICONS.inbox size={40} strokeWidth={1.5} style={{ marginBottom: 14, opacity: 0.4, color: '#929292' }} />
           <h3 style={{ fontSize: '1.1rem', color: '#929292', marginBottom: 8 }}>Queue cleared</h3>
           <p style={{ fontSize: '0.84rem', color: '#6a6a6a', maxWidth: 240, lineHeight: 1.6, margin: '0 auto' }}>
             You&apos;ve reviewed all current buyers. Check back soon.
@@ -209,6 +216,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
 
   return (
     <>
+      <Confetti trigger={celebrate} />
       <style>{`
         .seller-swipe-layout { display: flex; align-items: flex-start; justify-content: center; gap: 32px; flex-wrap: wrap; }
         .seller-card-wrap { position: relative; width: 360px; height: 540px; flex-shrink: 0; }
@@ -349,17 +357,17 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
               onClick={() => !swiping && doSwipe('pass', current)}
               disabled={swiping}
               aria-label="Pass"
-              style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', fontSize: '1.3rem', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}
+              style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}
             >
-              ✕
+              <SWIPE_ICONS.pass size={22} strokeWidth={2} />
             </button>
             <button
               onClick={() => !swiping && doSwipe('connect', current)}
               disabled={swiping}
               aria-label="Connect"
-              style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}
+              style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}
             >
-              ♡
+              <SWIPE_ICONS.like size={26} strokeWidth={2} fill="currentColor" />
             </button>
           </div>
 

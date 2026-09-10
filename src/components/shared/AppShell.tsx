@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logoutAction } from '@/lib/actions/auth'
 import { cn } from '@/lib/utils'
+import { NAV_ICONS } from '@/lib/icons'
 import type { Profile } from '@/types'
 
 interface NavItem {
   href: string
   label: string
-  icon: string
+  icon: keyof typeof NAV_ICONS
   badge?: number | string
 }
 
@@ -81,14 +82,16 @@ export function AppShell({ profile, children, navItems, role }: AppShellProps) {
           <div className="text-[9px] uppercase tracking-[0.14em] text-grey-mid px-6 py-3 pt-4">
             {roleLabels[role] ?? role}
           </div>
-          {navItems.map(item => (
+          {navItems.map(item => {
+            const Icon = NAV_ICONS[item.icon]
+            return (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
               className={cn('nav-item', pathname.startsWith(item.href) && 'active')}
             >
-              <span className="w-5 text-center text-base" aria-hidden>{item.icon}</span>
+              <Icon className="w-5 flex-shrink-0" size={17} strokeWidth={1.75} aria-hidden />
               <span>{item.label}</span>
               {item.badge !== undefined && (
                 <span className="ml-auto bg-orange text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
@@ -96,7 +99,8 @@ export function AppShell({ profile, children, navItems, role }: AppShellProps) {
                 </span>
               )}
             </Link>
-          ))}
+            )
+          })}
         </div>
 
         {/* User */}

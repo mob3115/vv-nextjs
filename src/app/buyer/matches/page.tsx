@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
+import { getIndustryIcon } from '@/lib/icons'
 import { BUYER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'My Matches' }
@@ -72,8 +73,8 @@ export default async function BuyerMatchesPage() {
               const ndaSigned = match.ndas?.some((n: any) => n.status === 'signed')
               return (
                 <div key={match.id} className="match-item">
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1rem', flexShrink: 0 }}>
-                    {listing?.industry_icon ?? '▣'}
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+                    {(() => { const Icon = getIndustryIcon(listing?.industry); return <Icon size={20} strokeWidth={1.75} /> })()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

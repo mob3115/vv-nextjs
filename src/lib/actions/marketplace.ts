@@ -1,13 +1,88 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { sellerListingSchema, buyerProfileSchema, ndaSignSchema, swipeSchema } from '@/lib/validations'
 import { enforceAnonymity } from '@/lib/utils'
 import { NDA_TEMPLATE_VERSION } from '@/lib/nda-template'
+import { computeCompatibility } from '@/lib/matching'
 import { requireUser, resolveMatchParty } from './shared'
 import type { SellerListingInput, BuyerProfileInput, NdaSignInput, SwipeInput } from '@/lib/validations'
 import type { ActionResult } from './auth'
+
+// ============================================================
+// COMPATIBILITY — recompute scores whenever a buyer profile or seller
+// listing changes, so every account (not just seeded demo data) gets a
+// real values-based score instead of a flat fallback.
+//
+// Uses the admin client: computing a pairwise score means reading across
+// *other* users' buyer profiles / listings, which RLS intentionally does
+// not allow for an ordinary user session (a seller has no general right to
+// browse buyer profiles, nor vice versa). Only the resulting number is
+// ever persisted — raw profile fields are never exposed back to the other
+// party through this path.
+// ============================================================
+
+async function recomputeScoresForBuyer(buyerId: string, buyer: {
+  values: string[]; target_industries: string[]; price_min: number; price_max: number; location_preference: string
+}) {
+  const admin = createAdminClient()
+  const { data: listings } = await admin
+    .from('seller_listings')
+    .select('id, industry, values, asking_range, location_region')
+    .eq('status', 'active')
+
+  if (!listings || listings.length === 0) return
+
+  const rows = listings.map((l: any) => ({
+    buyer_id: buyerId,
+    listing_id: l.id,
+    score: computeCompatibility({
+      buyerValues: buyer.values,
+      buyerTargetIndustries: buyer.target_industries,
+      buyerMin: buyer.price_min,
+      buyerMax: buyer.price_max,
+      buyerLocationPref: buyer.location_preference,
+      sellerValues: l.values,
+      sellerIndustry: l.industry,
+      sellerAskingRange: l.asking_range,
+      sellerRegion: l.location_region,
+    }).overall,
+  }))
+
+  const { error } = await admin.from('compatibility_scores').upsert(rows, { onConflict: 'buyer_id,listing_id' })
+  if (error) console.error('recomputeScoresForBuyer upsert error:', error)
+}
+
+async function recomputeScoresForListing(listingId: string, listing: {
+  industry: string; values: string[]; asking_range: string; location_region: string
+}) {
+  const admin = createAdminClient()
+  const { data: buyers } = await admin
+    .from('buyer_profiles')
+    .select('buyer_id, values, target_industries, price_min, price_max, location_preference')
+
+  if (!buyers || buyers.length === 0) return
+
+  const rows = buyers.map((b: any) => ({
+    buyer_id: b.buyer_id,
+    listing_id: listingId,
+    score: computeCompatibility({
+      buyerValues: b.values,
+      buyerTargetIndustries: b.target_industries,
+      buyerMin: b.price_min,
+      buyerMax: b.price_max,
+      buyerLocationPref: b.location_preference,
+      sellerValues: listing.values,
+      sellerIndustry: listing.industry,
+      sellerAskingRange: listing.asking_range,
+      sellerRegion: listing.location_region,
+    }).overall,
+  }))
+
+  const { error } = await admin.from('compatibility_scores').upsert(rows, { onConflict: 'buyer_id,listing_id' })
+  if (error) console.error('recomputeScoresForListing upsert error:', error)
+}
 
 // ============================================================
 // LISTINGS — Discover queue
@@ -45,15 +120,12 @@ export async function getDiscoverListings() {
     (l: any) => !excludeIds.includes(l.id)
   )
 
-  // 4. Compatibility scores for this buyer
-  const { data: scoreRows } = await supabase
-    .from('compatibility_scores')
-    .select('listing_id, score')
+  // 4. This buyer's own profile — drives the real compatibility computation
+  const { data: buyerProfile } = await supabase
+    .from('buyer_profiles')
+    .select('values, target_industries, price_min, price_max, location_preference')
     .eq('buyer_id', user.id)
-
-  const scoreMap = new Map(
-    (scoreRows ?? []).map((s: any) => [s.listing_id, s.score])
-  )
+    .maybeSingle()
 
   // 5. NDA status — determines anonymity level
   const { data: ndaRows } = await supabase
@@ -64,12 +136,31 @@ export async function getDiscoverListings() {
 
   const signedSellerIds = new Set((ndaRows ?? []).map((n: any) => n.seller_id))
 
-  // 6. Apply anonymity, attach score, sort by score descending
+  // 6. Apply anonymity, compute a real score + breakdown, sort descending
   return unseen
-    .map((listing: any) => ({
-      ...enforceAnonymity(listing, signedSellerIds.has(listing.seller_id)),
-      compatibility_score: scoreMap.get(listing.id) ?? 60,
-    }))
+    .map((listing: any) => {
+      const { overall, breakdown } = computeCompatibility({
+        buyerValues: buyerProfile?.values,
+        buyerTargetIndustries: buyerProfile?.target_industries,
+        buyerMin: buyerProfile?.price_min,
+        buyerMax: buyerProfile?.price_max,
+        buyerLocationPref: buyerProfile?.location_preference,
+        sellerValues: listing.values,
+        sellerIndustry: listing.industry,
+        sellerAskingRange: listing.asking_range,
+        sellerRegion: listing.location_region,
+      })
+      return {
+        ...enforceAnonymity(listing, signedSellerIds.has(listing.seller_id)),
+        compatibility_score: overall,
+        score_breakdown: [
+          { label: 'Values Match',  value: breakdown.valuesMatch },
+          { label: 'Industry Fit',  value: breakdown.industryFit },
+          { label: 'Price Overlap', value: breakdown.priceOverlap },
+          { label: 'Geography',     value: breakdown.geography },
+        ],
+      }
+    })
     .sort((a: any, b: any) => b.compatibility_score - a.compatibility_score)
 }
 
@@ -87,7 +178,7 @@ export async function createSellerListing(input: SellerListingInput): Promise<Ac
   const user = await requireUser(supabase)
   const d = parsed.data
 
-  const { error } = await supabase.from('seller_listings').insert({
+  const { data: created, error } = await supabase.from('seller_listings').insert({
     seller_id: user.id,
     status: 'active',
     industry: d.industry,
@@ -112,12 +203,16 @@ export async function createSellerListing(input: SellerListingInput): Promise<Ac
     revenue_exact: d.revenueExact,
     asking_price_exact: d.askingPriceExact,
     ebitda: d.ebitda,
-  })
+  }).select('id').single()
 
   if (error) {
     console.error('createSellerListing error:', error)
     return { error: 'Failed to create listing. Please try again.' }
   }
+
+  await recomputeScoresForListing(created.id, {
+    industry: d.industry, values: d.values, asking_range: d.askingRange, location_region: d.locationRegion,
+  })
 
   revalidatePath('/seller/listing')
   return { success: true }
@@ -153,6 +248,14 @@ export async function upsertBuyerProfile(input: BuyerProfileInput): Promise<Acti
   }, { onConflict: 'buyer_id' })
 
   if (error) return { error: 'Failed to save profile. Please try again.' }
+
+  await recomputeScoresForBuyer(user.id, {
+    values: d.values,
+    target_industries: d.targetIndustries,
+    price_min: d.priceMin,
+    price_max: d.priceMax,
+    location_preference: d.locationPreference,
+  })
 
   revalidatePath('/buyer/profile')
   return { success: true }
@@ -491,6 +594,10 @@ export async function updateSellerListing(input: any): Promise<ActionResult> {
     console.error('updateSellerListing error:', error)
     return { error: 'Failed to update listing. Please try again.' }
   }
+
+  await recomputeScoresForListing(input.id, {
+    industry: input.industry, values: input.values, asking_range: input.askingRange, location_region: input.locationRegion,
+  })
 
   revalidatePath('/seller/listing')
   revalidatePath('/seller/dashboard')

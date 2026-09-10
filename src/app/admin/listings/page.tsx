@@ -46,7 +46,7 @@ export default async function AdminListingsPage() {
                 <tr key={l.id} style={{ borderBottom: '1px solid #2e2e2e' }}>
                   <td style={{ padding: '12px 14px', color: '#fff', fontWeight: 600 }}>{l.business_name ?? '[Hidden]'}</td>
                   <td style={{ padding: '12px 14px', color: '#929292' }}>{l.seller?.full_name}</td>
-                  <td style={{ padding: '12px 14px', color: '#D9D9D9' }}>{l.industry_icon} {l.industry}</td>
+                  <td style={{ padding: '12px 14px', color: '#D9D9D9' }}>{l.industry}</td>
                   <td style={{ padding: '12px 14px', color: '#C46A00' }}>{l.asking_range}</td>
                   <td style={{ padding: '12px 14px' }}>
                     <span className={l.status === 'active' ? 'badge-green' : 'badge-grey'}>{l.status}</span>

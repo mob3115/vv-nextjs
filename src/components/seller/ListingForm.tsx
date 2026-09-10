@@ -4,26 +4,14 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { createSellerListing, updateSellerListing } from '@/lib/actions/marketplace'
+import { getIndustryIcon, ANON_ICONS } from '@/lib/icons'
 
 const INDUSTRIES = [
-  { value: 'Manufacturing',                  icon: '▣' },
-  { value: 'Healthcare',                     icon: '◈' },
-  { value: 'Food & Beverage',               icon: '◇' },
-  { value: 'Education Technology',           icon: '◎' },
-  { value: 'Environmental Services',         icon: '○' },
-  { value: 'Events & Hospitality',           icon: '◉' },
-  { value: 'Landscaping & Property Services',icon: '▲' },
-  { value: 'Media & Publishing',             icon: '▤' },
-  { value: 'Veterinary / Animal Health',     icon: '◆' },
-  { value: 'Security & Risk',               icon: '▦' },
-  { value: 'Professional Services',          icon: '▥' },
-  { value: 'Senior Care',                   icon: '◐' },
-  { value: 'Technology',                    icon: '◑' },
-  { value: 'Retail',                        icon: '▢' },
-  { value: 'Construction',                  icon: '△' },
-  { value: 'Transportation & Logistics',    icon: '▷' },
-  { value: 'Finance & Insurance',           icon: '◁' },
-  { value: 'Other',                         icon: '▪' },
+  'Manufacturing', 'Healthcare', 'Food & Beverage', 'Education Technology',
+  'Environmental Services', 'Events & Hospitality', 'Landscaping & Property Services',
+  'Media & Publishing', 'Veterinary / Animal Health', 'Security & Risk',
+  'Professional Services', 'Senior Care', 'Technology', 'Retail',
+  'Construction', 'Transportation & Logistics', 'Finance & Insurance', 'Other',
 ]
 
 const REVENUE_BANDS = [
@@ -77,7 +65,6 @@ export function ListingForm({ existing }: ListingFormProps) {
 
   // Form state — pre-filled if editing
   const [industry, setIndustry]           = useState(existing?.industry ?? '')
-  const [industryIcon, setIndustryIcon]   = useState(existing?.industry_icon ?? '▣')
   const [businessName, setBusinessName]   = useState(existing?.business_name ?? '')
   const [ownerFullName, setOwnerFullName] = useState(existing?.owner_full_name ?? '')
   const [ownerFirstName, setOwnerFirstName] = useState(existing?.owner_first_name ?? '')
@@ -114,9 +101,8 @@ export function ListingForm({ existing }: ListingFormProps) {
     )
   }
 
-  function selectIndustry(ind: typeof INDUSTRIES[0]) {
-    setIndustry(ind.value)
-    setIndustryIcon(ind.icon)
+  function selectIndustry(ind: string) {
+    setIndustry(ind)
   }
 
   function validateStep(s: Step): boolean {
@@ -156,7 +142,7 @@ export function ListingForm({ existing }: ListingFormProps) {
     startTransition(async () => {
       const payload = {
         industry,
-        industryIcon,
+        industryIcon: industry, // icon is now always derived from the industry itself
         businessName,
         ownerFullName,
         ownerFirstName,
@@ -266,22 +252,25 @@ export function ListingForm({ existing }: ListingFormProps) {
         <div style={{ marginBottom: 16 }}>
           {label('Industry *')}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {INDUSTRIES.map(ind => (
+            {INDUSTRIES.map(ind => {
+              const Icon = getIndustryIcon(ind)
+              return (
               <button
-                key={ind.value}
+                key={ind}
                 type="button"
                 onClick={() => selectIndustry(ind)}
                 style={{
-                  padding: '10px 8px', borderRadius: 8, border: `1px solid ${industry === ind.value ? '#A05500' : '#2e2e2e'}`,
-                  background: industry === ind.value ? 'rgba(160,85,0,0.1)' : '#141414',
-                  color: industry === ind.value ? '#C46A00' : '#929292',
+                  padding: '10px 8px', borderRadius: 8, border: `1px solid ${industry === ind ? '#A05500' : '#2e2e2e'}`,
+                  background: industry === ind ? 'rgba(160,85,0,0.1)' : '#141414',
+                  color: industry === ind ? '#C46A00' : '#929292',
                   fontSize: '0.72rem', cursor: 'pointer', textAlign: 'center', lineHeight: 1.4, fontFamily: 'inherit',
                 }}
               >
-                <div style={{ fontSize: '1.1rem', marginBottom: 3 }}>{ind.icon}</div>
-                {ind.value}
+                <Icon size={20} strokeWidth={1.75} style={{ marginBottom: 3, marginInline: 'auto' }} />
+                {ind}
               </button>
-            ))}
+              )
+            })}
           </div>
           <Err field="industry" />
         </div>
@@ -529,10 +518,12 @@ export function ListingForm({ existing }: ListingFormProps) {
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
           {([
-            [1, '● Anonymous', 'No name or identity. Revenue range and region only. Maximum privacy.'],
-            [2, '○ Partial ID', 'Your first name, industry, city, and revenue band are visible. Business name stays hidden.'],
-            [3, '✓ Full Reveal', 'Everything visible immediately — no NDA required. Maximum exposure.'],
-          ] as [1|2|3, string, string][]).map(([level, label2, desc]) => (
+            [1, 'Anonymous', 'No name or identity. Revenue range and region only. Maximum privacy.'],
+            [2, 'Partial ID', 'Your first name, industry, city, and revenue band are visible. Business name stays hidden.'],
+            [3, 'Full Reveal', 'Everything visible immediately — no NDA required. Maximum exposure.'],
+          ] as [1|2|3, string, string][]).map(([level, label2, desc]) => {
+            const Icon = ANON_ICONS[level]
+            return (
             <button
               key={level}
               type="button"
@@ -544,15 +535,19 @@ export function ListingForm({ existing }: ListingFormProps) {
                 display: 'flex', alignItems: 'flex-start', gap: 12,
               }}
             >
-              <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${anonymityLevel === level ? '#A05500' : '#2e2e2e'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#A05500', fontSize: '0.75rem' }}>
-                {anonymityLevel === level ? '●' : ''}
+              <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${anonymityLevel === level ? '#A05500' : '#2e2e2e'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#A05500' }}>
+                {anonymityLevel === level && <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#A05500' }} />}
               </div>
               <div>
-                <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', marginBottom: 3 }}>{label2}</div>
+                <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon size={14} strokeWidth={2} />
+                  {label2}
+                </div>
                 <div style={{ fontSize: '0.78rem', color: '#929292', lineHeight: 1.5 }}>{desc}</div>
               </div>
             </button>
-          ))}
+            )
+          })}
         </div>
 
         {/* Preview of what buyers will see */}
