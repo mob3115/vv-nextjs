@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { SellerSwipeArena } from '@/components/seller/SellerSwipeArena'
 import { computeCompatibility } from '@/lib/matching'
@@ -10,12 +10,7 @@ export const metadata: Metadata = { title: 'Discover Buyers' }
 
 export default async function SellerDiscoverPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   const { data: listing } = await supabase
     .from('seller_listings')

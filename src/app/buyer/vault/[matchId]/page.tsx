@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { BUYER_NAV } from '@/lib/nav'
 import { getBuyerVaultAccess } from '@/lib/actions/vault'
@@ -10,12 +11,7 @@ export const metadata: Metadata = { title: 'Document Vault' }
 
 export default async function BuyerVaultPage({ params }: { params: { matchId: string } }) {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   const access = await getBuyerVaultAccess(params.matchId)
   if (!access) notFound()

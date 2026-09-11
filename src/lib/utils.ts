@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import type { SafeListing, AnonymityLevel } from '@/types'
+import type { SafeListing, SellerListing, AnonymityLevel } from '@/types'
 
 // Tailwind class merging utility
 export function cn(...inputs: ClassValue[]) {
@@ -65,6 +65,3 @@ export function enforceAnonymity(listing: SellerListing, ndaSigned: boolean): Sa
     compatibility_score: 0, // set by caller
   }
 }
-
-// Needs import for the above
-import type { SellerListing } from '@/types'

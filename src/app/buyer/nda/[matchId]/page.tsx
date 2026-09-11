@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { NdaSignForm } from '@/components/nda/NdaSignForm'
 import { getNdaSignContext } from '@/lib/actions/marketplace'
@@ -10,12 +11,7 @@ export const metadata: Metadata = { title: 'Sign NDA' }
 
 export default async function BuyerNdaSignPage({ params }: { params: { matchId: string } }) {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { profile } = await requireUserAndProfile(supabase)
 
   const ctx = await getNdaSignContext(params.matchId)
   if (!ctx) notFound()
