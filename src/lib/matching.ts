@@ -46,8 +46,16 @@ const VALUE_VECTORS: Record<string, Partial<Record<Dimension, number>>> = {
   'Client Stewardship':        { integrity: 0.6, community: 0.5, people: 0.2 },
 }
 
+// Case-insensitive lookup — real data has included values that differ from
+// VALUE_VECTORS only in casing (e.g. "Worker safety" vs "Worker Safety").
+// Wholly different wording still won't match; that's a data problem, not
+// something a lookup can fix, but this closes the cheap, common case.
+const VALUE_VECTORS_LOWER: Record<string, Partial<Record<Dimension, number>>> = Object.fromEntries(
+  Object.entries(VALUE_VECTORS).map(([k, v]) => [k.toLowerCase(), v])
+)
+
 function vectorOf(value: string): number[] {
-  const v = VALUE_VECTORS[value]
+  const v = VALUE_VECTORS_LOWER[value.toLowerCase()]
   return DIMENSIONS.map(d => v?.[d] ?? 0)
 }
 
@@ -63,7 +71,7 @@ function cosine(a: number[], b: number[]): number {
 }
 
 function valueSimilarity(a: string, b: string): number {
-  if (a === b) return 1
+  if (a.toLowerCase() === b.toLowerCase()) return 1
   return Math.max(0, cosine(vectorOf(a), vectorOf(b)))
 }
 
