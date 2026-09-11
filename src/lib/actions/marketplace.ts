@@ -282,10 +282,15 @@ export async function getBuyerProfile() {
 // buyer creates a pending match that buyer sees on My Matches. Once both
 // sides have liked, the match flips to 'mutual'.
 //
-// Both branches re-read *both* sides' swipe rows fresh via
-// getMatchState() every time either side likes, so it never matters
-// who liked first — a late like on either side self-corrects the
-// match instead of needing separate "catch-up" logic.
+// upsertMatchOnLike() always reads the *existing* matches row first and
+// only ever adds information to it — a liked flag already true is never
+// written back to false. The swipes table is still consulted (via
+// getMatchState) as a defensive fallback signal, OR'd in rather than
+// trusted outright: re-deriving both flags from swipes on every call and
+// overwriting the row with that snapshot (the previous approach) meant
+// that if the swipes lookup for the *other* party ever disagreed with
+// the row — stale data, a partially-failed earlier write — a late like
+// would silently *downgrade* an already-connected match back to pending.
 // ============================================================
 
 async function getMatchState(
@@ -308,6 +313,84 @@ async function getMatchState(
     sellerLiked: !!sellerSwipe,
     score: scoreRow?.score ?? 60,
   }
+}
+
+async function upsertMatchOnLike(
+  supabase: ReturnType<typeof createClient>,
+  buyerId: string,
+  listingId: string,
+  sellerUserId: string,
+  likerSide: 'buyer' | 'seller'
+): Promise<{ error?: string; matched: boolean }> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('matches')
+    .select('id, buyer_liked, seller_liked')
+    .eq('buyer_id', buyerId)
+    .eq('seller_id', listingId)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error('match lookup error:', fetchError)
+    return { error: 'Failed to connect. Please try again.', matched: false }
+  }
+
+  const { buyerLiked: swipeBuyerLiked, sellerLiked: swipeSellerLiked, score } =
+    await getMatchState(supabase, buyerId, listingId, sellerUserId)
+
+  // The current actor's like is always true by definition; the other
+  // side's is whatever the row already has, OR the swipes fallback —
+  // never re-derived in a way that could erase an existing true value.
+  const buyerLiked  = likerSide === 'buyer'  || !!existing?.buyer_liked  || swipeBuyerLiked
+  const sellerLiked = likerSide === 'seller' || !!existing?.seller_liked || swipeSellerLiked
+  const isMutual = buyerLiked && sellerLiked
+
+  if (!existing) {
+    const { data: createdRows, error } = await supabase
+      .from('matches')
+      .insert({
+        buyer_id: buyerId,
+        seller_id: listingId,
+        compatibility_score: score,
+        buyer_liked: buyerLiked,
+        seller_liked: sellerLiked,
+        status: isMutual ? 'mutual' : 'pending',
+      })
+      .select('id')
+
+    if (error) {
+      console.error('match create error:', error)
+      return { error: 'Failed to connect. Please try again.', matched: false }
+    }
+    if (!createdRows || createdRows.length === 0) {
+      console.error('match create affected 0 rows for buyer', buyerId, 'listing', listingId,
+        '— check that the matches INSERT policies (migrations 001, 005) have been applied.')
+      return { error: 'Could not connect right now. Please try again in a moment.', matched: false }
+    }
+    return { matched: isMutual }
+  }
+
+  // .select() here is load-bearing: without it, an UPDATE that Postgres
+  // RLS silently filters down to 0 matched rows still comes back with
+  // error === null — a real failure would otherwise be reported as
+  // success. Requires the "Parties can update own matches" RLS policy
+  // (migration 002) to actually be applied.
+  const { data: updatedRows, error } = await supabase
+    .from('matches')
+    .update({ buyer_liked: buyerLiked, seller_liked: sellerLiked, status: isMutual ? 'mutual' : 'pending' })
+    .eq('id', existing.id)
+    .select('id')
+
+  if (error) {
+    console.error('match update error:', error)
+    return { error: 'Failed to connect. Please try again.', matched: false }
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    console.error('match update affected 0 rows for match', existing.id,
+      '— check that migration 002 (matches UPDATE policy) has been applied.')
+    return { error: 'Could not connect right now. Please try again in a moment.', matched: false }
+  }
+
+  return { matched: isMutual }
 }
 
 export async function recordSwipe(
@@ -351,27 +434,12 @@ export async function recordSwipe(
     }
     if (!listing) return { success: true, matched: false } // listing no longer exists — nothing to match against
 
-    const { buyerLiked, sellerLiked, score } = await getMatchState(
-      supabase, user.id, targetListingId, listing.seller_id
-    )
-    const isMutual = buyerLiked && sellerLiked
-
-    const { error: matchError } = await supabase
-      .from('matches')
-      .upsert({
-        buyer_id: user.id,
-        seller_id: targetListingId,
-        compatibility_score: score,
-        buyer_liked: buyerLiked,
-        seller_liked: sellerLiked,
-        status: isMutual ? 'mutual' : 'pending',
-      }, { onConflict: 'buyer_id,seller_id' })
-
-    if (matchError) console.error('match upsert error:', matchError)
+    const result = await upsertMatchOnLike(supabase, user.id, targetListingId, listing.seller_id, 'buyer')
+    if (result.error) return { error: result.error }
 
     revalidatePath('/buyer/matches')
     revalidatePath('/seller/interests')
-    return { success: true, matched: isMutual }
+    return { success: true, matched: result.matched }
   }
 
   // 2b. Seller liking a buyer — create a pending match (if the buyer
@@ -389,68 +457,15 @@ export async function recordSwipe(
     }
     if (!listing) return { success: true, matched: false } // no listing — nothing to connect against
 
-    const { buyerLiked, sellerLiked, score } = await getMatchState(
-      supabase, targetBuyerId, listing.id, user.id
-    )
-
-    // Seller is the first to like: create the pending match so the buyer
-    // sees a connection request waiting on them, symmetric with a buyer's
-    // like (branch 2a above) always creating one visible to the seller.
     // Requires the "Sellers can create pending matches" INSERT policy
-    // (migration 005) — without it this insert is silently rejected by RLS.
-    if (!buyerLiked) {
-      const { data: createdRows, error: createError } = await supabase
-        .from('matches')
-        .upsert({
-          buyer_id: targetBuyerId,
-          seller_id: listing.id,
-          compatibility_score: score,
-          buyer_liked: false,
-          seller_liked: true,
-          status: 'pending',
-        }, { onConflict: 'buyer_id,seller_id' })
-        .select('id')
-
-      if (createError) {
-        console.error('match create error (seller-initiated):', createError)
-        return { error: 'Failed to connect. Please try again.' }
-      }
-      if (!createdRows || createdRows.length === 0) {
-        console.error('match create affected 0 rows for buyer', targetBuyerId, 'listing', listing.id,
-          '— check that migration 005 (seller-initiated matches INSERT policy) has been applied.')
-        return { error: 'Could not connect right now. Please try again in a moment.' }
-      }
-
-      revalidatePath('/seller/interests')
-      revalidatePath('/buyer/matches')
-      return { success: true, matched: false }
-    }
-
-    // .select() here is load-bearing: without it, an UPDATE that Postgres
-    // RLS silently filters down to 0 matched rows still comes back with
-    // error === null — a real failure would otherwise be reported as
-    // success. Requires the "Parties can update own matches" RLS policy
-    // (migration 002) to actually be applied.
-    const { data: updatedRows, error: matchError } = await supabase
-      .from('matches')
-      .update({ seller_liked: sellerLiked, status: sellerLiked ? 'mutual' : 'pending' })
-      .eq('buyer_id', targetBuyerId)
-      .eq('seller_id', listing.id)
-      .select('id')
-
-    if (matchError) {
-      console.error('match update error:', matchError)
-      return { error: 'Failed to connect. Please try again.' }
-    }
-    if (!updatedRows || updatedRows.length === 0) {
-      console.error('match update affected 0 rows for buyer', targetBuyerId, 'listing', listing.id,
-        '— check that migration 002 (matches UPDATE policy) has been applied.')
-      return { error: 'Could not connect right now. Please try again in a moment.' }
-    }
+    // (migration 005) for the case where this is a brand new row — without
+    // it that insert is silently rejected by RLS.
+    const result = await upsertMatchOnLike(supabase, targetBuyerId, listing.id, user.id, 'seller')
+    if (result.error) return { error: result.error }
 
     revalidatePath('/seller/interests')
     revalidatePath('/buyer/matches')
-    return { success: true, matched: sellerLiked }
+    return { success: true, matched: result.matched }
   }
 
   return { success: true, matched: false }
