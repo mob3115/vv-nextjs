@@ -4,49 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { upsertBuyerProfile } from '@/lib/actions/marketplace'
-
-const INDUSTRIES = [
-  'Manufacturing', 'Healthcare', 'Food & Beverage', 'Education Technology',
-  'Environmental Services', 'Events & Hospitality', 'Landscaping & Property Services',
-  'Media & Publishing', 'Veterinary / Animal Health', 'Security & Risk',
-  'Professional Services', 'Senior Care', 'Technology', 'Retail',
-  'Construction', 'Transportation & Logistics', 'Finance & Insurance', 'Other',
-]
-
-const FUNDING_OPTIONS = [
-  { value: 'cash',             label: 'Cash',             desc: 'Self-funded acquisition' },
-  { value: 'sba_loan',         label: 'SBA Loan',         desc: 'Government-backed financing' },
-  { value: 'private_equity',   label: 'Private Equity',   desc: 'PE fund or investor group' },
-  { value: 'seller_financing', label: 'Seller Financing', desc: 'Seller carries part of the note' },
-  { value: 'combination',      label: 'Combination',      desc: 'Mix of the above' },
-]
-
-const ALL_VALUES = [
-  'Investing Local',
-  'Craftsmanship',
-  'Employee Wellbeing',
-  'Long Term Investment',
-  'Equity',
-  'Environmental Stewardship',
-  'Employee Ownership',
-  'Accessible to All',
-  'Worker Safety',
-  'Creative Excellence',
-  'Economic Mobility',
-  'Free Enterprise',
-  'Conscious Capitalism',
-  'Compassionate Care',
-  'Sustainability',
-  'Workforce Development',
-  'Customer Focused',
-  'Resident Dignity',
-  'Excellence & Quality',
-  'Family Values',
-  'Innovation & Discovery',
-  'Individual Responsibility',
-  'Integrity',
-  'Client Stewardship',
-]
+import { INDUSTRIES, FUNDING_SOURCES as FUNDING_OPTIONS, CORE_VALUES as ALL_VALUES, BUYER_LOCATION_PREFERENCES } from '@/lib/constants'
 
 interface BuyerProfileFormProps {
   existing?: any
@@ -207,7 +165,7 @@ export function BuyerProfileForm({ existing, fullName }: BuyerProfileFormProps) 
               style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: location ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
             >
               <option value="">Select preference</option>
-              {['Northeast','Mid-Atlantic','Southeast','South','Midwest','Southwest','West Coast','Pacific Northwest','National (open to any)','Remote-operable preferred'].map(r => (
+              {BUYER_LOCATION_PREFERENCES.map(r => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>

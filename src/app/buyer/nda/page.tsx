@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { NAV_ICONS } from '@/lib/icons'
 import { BUYER_NAV } from '@/lib/nav'
@@ -9,12 +9,7 @@ export const metadata: Metadata = { title: 'NDAs' }
 
 export default async function BuyerNdaPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   // Query from matches (not ndas) so a mutual match shows up here even
   // before anyone has started the NDA — an ndas row only exists once one

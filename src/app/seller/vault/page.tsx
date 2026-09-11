@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { SELLER_NAV } from '@/lib/nav'
 import { getSellerVaultDocuments } from '@/lib/actions/vault'
@@ -11,12 +11,7 @@ export const metadata: Metadata = { title: 'Document Vault' }
 
 export default async function SellerVaultPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   const documents = await getSellerVaultDocuments()
   const preNda = documents.filter(d => d.tier === 'pre-nda')

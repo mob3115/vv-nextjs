@@ -6,6 +6,8 @@ import toast from 'react-hot-toast'
 import { recordSwipe } from '@/lib/actions/marketplace'
 import { Confetti } from '@/components/shared/Confetti'
 import { SWIPE_ICONS, MISC_ICONS } from '@/lib/icons'
+import { ScoreRing } from '@/components/ui/ScoreRing'
+import { scoreColor } from '@/lib/utils'
 
 interface BuyerCard {
   id: string
@@ -21,6 +23,8 @@ interface BuyerCard {
   values?: string[]
   values_statement?: string
   location_preference?: string
+  compatibility_score?: number
+  score_breakdown?: { label: string; value: number }[]
 }
 
 interface SellerSwipeArenaProps {
@@ -258,18 +262,23 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
               <div style={{ height: 5, background: 'linear-gradient(90deg,#A05500,#C46A00)' }} />
 
               {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 20px 14px' }}>
-                <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.6rem', flexShrink: 0 }}>
-                  {initial}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '20px 20px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.6rem', flexShrink: 0 }}>
+                    {initial}
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: 3 }}>
+                      {current.full_name}
+                    </h2>
+                    <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C46A00', background: 'rgba(160,85,0,0.1)', border: '1px solid rgba(160,85,0,0.25)', padding: '2px 8px', borderRadius: 99 }}>
+                      Buyer
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: 3 }}>
-                    {current.full_name}
-                  </h2>
-                  <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#C46A00', background: 'rgba(160,85,0,0.1)', border: '1px solid rgba(160,85,0,0.25)', padding: '2px 8px', borderRadius: 99 }}>
-                    Buyer
-                  </span>
-                </div>
+                {current.compatibility_score !== undefined && (
+                  <ScoreRing score={current.compatibility_score} size={60} />
+                )}
               </div>
 
               <div style={{ padding: '0 20px 18px' }}>
@@ -418,6 +427,23 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
                 </div>
               </div>
             </DetailSection>
+            {current.score_breakdown && (
+              <DetailSection title="Score Breakdown">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {current.score_breakdown.map(({ label, value }) => (
+                    <div key={label}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <span style={{ fontSize: '0.72rem', color: '#6a6a6a' }}>{label}</span>
+                        <span style={{ fontSize: '0.72rem', color: scoreColor(value) }}>{value}</span>
+                      </div>
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{ width: `${value}%`, background: scoreColor(value) }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DetailSection>
+            )}
           </div>
         )}
       </div>

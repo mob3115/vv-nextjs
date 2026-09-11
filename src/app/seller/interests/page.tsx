@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { ConnectButton } from '@/components/seller/ConnectButton'
 import { SELLER_NAV } from '@/lib/nav'
@@ -9,12 +9,7 @@ export const metadata: Metadata = { title: 'Buyer Interest' }
 
 export default async function SellerInterestsPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   const { data: listing } = await supabase
     .from('seller_listings').select('id').eq('seller_id', user.id).single()

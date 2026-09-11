@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { SwipeArena } from '@/components/buyer/SwipeArena'
 import { BUYER_NAV } from '@/lib/nav'
@@ -10,12 +10,7 @@ export const metadata: Metadata = { title: 'Discover Businesses' }
 
 export default async function DiscoverPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   // 1. Get listings this buyer has already swiped on
   const { data: swipedRows } = await supabase

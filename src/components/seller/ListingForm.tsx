@@ -5,51 +5,7 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { createSellerListing, updateSellerListing } from '@/lib/actions/marketplace'
 import { getIndustryIcon, ANON_ICONS } from '@/lib/icons'
-
-const INDUSTRIES = [
-  'Manufacturing', 'Healthcare', 'Food & Beverage', 'Education Technology',
-  'Environmental Services', 'Events & Hospitality', 'Landscaping & Property Services',
-  'Media & Publishing', 'Veterinary / Animal Health', 'Security & Risk',
-  'Professional Services', 'Senior Care', 'Technology', 'Retail',
-  'Construction', 'Transportation & Logistics', 'Finance & Insurance', 'Other',
-]
-
-const REVENUE_BANDS = [
-  'Under $500K', '$500K–$1M', '$1M–$2.5M',
-  '$2.5M–$5M', '$5M–$10M', '$10M–$25M', 'Over $25M',
-]
-
-const TIMELINES = [
-  '3–6 months', '6–12 months', '12–18 months',
-  '18–24 months', '2–3 years', 'No set timeline',
-]
-
-const ALL_VALUES = [
-  'Investing Local',
-  'Craftsmanship',
-  'Employee Wellbeing',
-  'Long Term Investment',
-  'Equity',
-  'Environmental Stewardship',
-  'Employee Ownership',
-  'Accessible to All',
-  'Worker Safety',
-  'Creative Excellence',
-  'Economic Mobility',
-  'Free Enterprise',
-  'Conscious Capitalism',
-  'Compassionate Care',
-  'Sustainability',
-  'Workforce Development',
-  'Customer Focused',
-  'Resident Dignity',
-  'Excellence & Quality',
-  'Family Values',
-  'Innovation & Discovery',
-  'Individual Responsibility',
-  'Integrity',
-  'Client Stewardship',
-]
+import { INDUSTRIES, REVENUE_BANDS, TRANSITION_TIMELINES as TIMELINES, CORE_VALUES as ALL_VALUES, REGIONS } from '@/lib/constants'
 
 interface ListingFormProps {
   existing?: any  // existing listing data for edit mode
@@ -336,7 +292,7 @@ export function ListingForm({ existing }: ListingFormProps) {
             style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: locationRegion ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
           >
             <option value="">Select region</option>
-            {['Northeast','Mid-Atlantic','Southeast','South','Midwest','Southwest','West Coast','Pacific Northwest','National'].map(r => (
+            {REGIONS.map(r => (
               <option key={r} value={r}>{r}</option>
             ))}
           </select>

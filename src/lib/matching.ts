@@ -18,7 +18,7 @@ type Dimension = 'people' | 'community' | 'planet' | 'craft' | 'growth' | 'integ
 
 const DIMENSIONS: Dimension[] = ['people', 'community', 'planet', 'craft', 'growth', 'integrity']
 
-// Must stay in sync with ALL_VALUES in ListingForm.tsx / BuyerProfileForm.tsx.
+// Must stay in sync with CORE_VALUES in src/lib/constants.ts.
 const VALUE_VECTORS: Record<string, Partial<Record<Dimension, number>>> = {
   'Investing Local':           { community: 1.0, people: 0.2 },
   'Craftsmanship':             { craft: 1.0, integrity: 0.3 },
@@ -57,6 +57,13 @@ const VALUE_VECTORS_LOWER: Record<string, Partial<Record<Dimension, number>>> = 
 function vectorOf(value: string): number[] {
   const v = VALUE_VECTORS_LOWER[value.toLowerCase()]
   return DIMENSIONS.map(d => v?.[d] ?? 0)
+}
+
+// Exposed so a test can assert every value in CORE_VALUES (constants.ts) has
+// a real semantic mapping here — the two lists drifting apart is exactly
+// the bug class that caused the values-picker issue.
+export function isRecognizedValue(value: string): boolean {
+  return VALUE_VECTORS_LOWER[value.toLowerCase()] !== undefined
 }
 
 function cosine(a: number[], b: number[]): number {

@@ -1,23 +1,22 @@
 import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { SellerSwipeArena } from '@/components/seller/SellerSwipeArena'
+import { computeCompatibility } from '@/lib/matching'
 import { SELLER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Discover Buyers' }
 
 export default async function SellerDiscoverPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user.id).single()
-  if (!profile) redirect('/auth/login')
+  const { user, profile } = await requireUserAndProfile(supabase)
 
   const { data: listing } = await supabase
-    .from('seller_listings').select('id').eq('seller_id', user.id).single()
+    .from('seller_listings')
+    .select('id, industry, values, asking_range, location_region')
+    .eq('seller_id', user.id)
+    .single()
 
   // IDs already swiped on
   const { data: swipedRows } = await supabase
@@ -52,11 +51,26 @@ export default async function SellerDiscoverPage() {
 
   const detailMap = new Map((buyerDetails ?? []).map((d: any) => [d.buyer_id, d]))
 
-  // Merge into buyer cards
+  // Merge into buyer cards, with the same compatibility score + breakdown
+  // shown on the buyer's side of Discover — it's the same match either way,
+  // just viewed from the other party.
   const buyers = (allBuyers ?? [])
     .filter((b: any) => !excludeIds.includes(b.id))
     .map((b: any) => {
       const detail = detailMap.get(b.id)
+      const { overall, breakdown } = listing
+        ? computeCompatibility({
+            buyerValues: detail?.values,
+            buyerTargetIndustries: detail?.target_industries,
+            buyerMin: detail?.price_min,
+            buyerMax: detail?.price_max,
+            buyerLocationPref: detail?.location_preference,
+            sellerValues: listing.values,
+            sellerIndustry: listing.industry,
+            sellerAskingRange: listing.asking_range,
+            sellerRegion: listing.location_region,
+          })
+        : { overall: 60, breakdown: { valuesMatch: 60, industryFit: 60, priceOverlap: 60, geography: 60 } }
       return {
         id: b.id,
         full_name: b.full_name,
@@ -71,8 +85,16 @@ export default async function SellerDiscoverPage() {
         values:             detail?.values,
         values_statement:   detail?.values_statement,
         location_preference: detail?.location_preference,
+        compatibility_score: overall,
+        score_breakdown: [
+          { label: 'Values Match',  value: breakdown.valuesMatch },
+          { label: 'Industry Fit',  value: breakdown.industryFit },
+          { label: 'Price Overlap', value: breakdown.priceOverlap },
+          { label: 'Geography',     value: breakdown.geography },
+        ],
       }
     })
+    .sort((a, b) => b.compatibility_score - a.compatibility_score)
 
   return (
     <AppShell profile={profile} navItems={SELLER_NAV} role="seller">
