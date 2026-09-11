@@ -280,8 +280,12 @@ export function BuyerProfileForm({ existing, fullName }: BuyerProfileFormProps) 
 
         <div style={{ marginBottom: 16 }}>
           {fieldLabel(`Core Values * — ${values.length}/5 selected`)}
+          {/* Include any already-saved values not in the current picklist (e.g.
+              older data using different wording/casing) so they still show up
+              as selected and can be seen and deselected, instead of silently
+              counting toward the 5-value cap while appearing unselected. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 8 }}>
-            {ALL_VALUES.map(v => (
+            {[...ALL_VALUES, ...values.filter(v => !ALL_VALUES.includes(v))].map(v => (
               <button
                 key={v}
                 type="button"

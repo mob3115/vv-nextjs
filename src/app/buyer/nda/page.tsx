@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
+import { NAV_ICONS } from '@/lib/icons'
 import { BUYER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'NDAs' }
@@ -46,7 +47,7 @@ export default async function BuyerNdaPage() {
       <div className="page-body">
         {list.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 24px', color: '#6a6a6a' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 16, opacity: 0.4 }}>◇</div>
+            <NAV_ICONS.ndas size={40} strokeWidth={1.5} style={{ marginBottom: 16, opacity: 0.4, color: '#929292' }} />
             <h3 style={{ fontSize: '1.1rem', color: '#929292', marginBottom: 8 }}>No NDAs yet</h3>
             <p style={{ fontSize: '0.84rem', maxWidth: 320, margin: '0 auto 20px', lineHeight: 1.6 }}>
               When you match with a seller, you&apos;ll be invited to sign a mutual NDA to unlock full business details and secure messaging.
@@ -74,9 +75,9 @@ export default async function BuyerNdaPage() {
                     <span className="badge-grey">Not started</span>
                   )}
                   {row.status === 'signed' ? (
-                    <button className="btn-ghost btn-sm" style={{ fontSize: '0.75rem' }}>
+                    <a href={`/buyer/vault/${row.matchId}`} className="btn-ghost btn-sm" style={{ fontSize: '0.75rem', textDecoration: 'none' }}>
                       Open Vault →
-                    </button>
+                    </a>
                   ) : (
                     <a href={`/buyer/nda/${row.matchId}`} className="btn-primary btn-sm" style={{ fontSize: '0.75rem', textDecoration: 'none' }}>
                       Review & Sign →

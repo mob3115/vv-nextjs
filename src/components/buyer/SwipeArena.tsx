@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { recordSwipe } from '@/lib/actions/marketplace'
 import { ScoreRing } from '@/components/ui/ScoreRing'
+import { Confetti } from '@/components/shared/Confetti'
+import { SWIPE_ICONS, ANON_ICONS, MISC_ICONS, getIndustryIcon } from '@/lib/icons'
 import {
   getDisplayBusiness, getDisplayName, getDisplayLocation,
-  getDisplayRevenue, scoreBreakdown, scoreColor
+  getDisplayRevenue, scoreColor
 } from '@/lib/utils'
 import type { SafeListing } from '@/types'
 
@@ -16,6 +18,7 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
   const [swiping, setSwiping] = useState(false)
   const [overlayState, setOverlayState] = useState<'like' | 'pass' | null>(null)
   const [overlayOpacity, setOverlayOpacity] = useState(0)
+  const [celebrate, setCelebrate] = useState(0)
   const cardRef = useRef<HTMLDivElement>(null)
   const startX = useRef(0)
   const startY = useRef(0)
@@ -56,8 +59,12 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
     // Fire and forget — don't block the UI
     recordSwipe({ targetListingId: listing.id, direction })
       .then(result => {
-        if (result.matched)          toast.success('It\'s a match!')
-        else if (direction === 'like') toast.success('Connection sent — check My Matches!')
+        if (result.matched) {
+          toast.success('It\'s a match!')
+          setCelebrate(c => c + 1)
+        } else if (direction === 'like') {
+          toast.success('Connection sent — check My Matches!')
+        }
         router.refresh()
       })
       .catch(() => toast.error('Something went wrong'))
@@ -187,7 +194,7 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 14, opacity: 0.4 }}>◎</div>
+          <MISC_ICONS.inbox size={40} strokeWidth={1.5} style={{ marginBottom: 14, opacity: 0.4, color: '#929292' }} />
           <h3 style={{ fontSize: '1.1rem', color: '#929292', marginBottom: 8 }}>Queue cleared</h3>
           <p style={{ fontSize: '0.84rem', color: '#6a6a6a', maxWidth: 240, lineHeight: 1.6, margin: '0 auto' }}>
             You&apos;ve reviewed all current listings. Check back soon — new sellers join every day.
@@ -197,10 +204,11 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
     )
   }
 
-  const breakdown = scoreBreakdown(current.compatibility_score)
+  const breakdown = (current as any).score_breakdown ?? []
 
   return (
     <>
+      <Confetti trigger={celebrate} />
       {/* ---- Mobile layout: card + buttons above fold, detail below ---- */}
       <style>{`
         .swipe-layout { display: flex; align-items: flex-start; justify-content: center; gap: 32px; flex-wrap: wrap; }
@@ -247,8 +255,8 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
 
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 12px' }}>
-                <div style={{ width: 46, height: 46, borderRadius: 10, background: 'rgba(160,85,0,0.12)', border: '1px solid rgba(160,85,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', color: '#C46A00', flexShrink: 0 }}>
-                  {current.industry_icon}
+                <div style={{ width: 46, height: 46, borderRadius: 10, background: 'rgba(160,85,0,0.12)', border: '1px solid rgba(160,85,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C46A00', flexShrink: 0 }}>
+                  {(() => { const Icon = getIndustryIcon(current.industry); return <Icon size={22} strokeWidth={1.75} /> })()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                   <ScoreRing score={current.compatibility_score} size={66} />
@@ -313,12 +321,12 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <button onClick={() => !swiping && doSwipe('pass', current)} disabled={swiping} aria-label="Pass"
-              style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', fontSize: '1.3rem', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
-              ✕
+              style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
+              <SWIPE_ICONS.pass size={22} strokeWidth={2} />
             </button>
             <button onClick={() => !swiping && doSwipe('like', current)} disabled={swiping} aria-label="Connect"
-              style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', fontSize: '1.5rem', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
-              ♡
+              style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
+              <SWIPE_ICONS.like size={26} strokeWidth={2} fill="currentColor" />
             </button>
           </div>
 
@@ -380,12 +388,13 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
   )
 }
 
-function AnonBadge({ level }: { level: number }) {
-  const cfg = [null,
-    { cls: 'anon-1', label: '● Anonymous' },
-    { cls: 'anon-2', label: '○ Partial ID' },
-    { cls: 'anon-3', label: '✓ Full Reveal' },
-  ][level]
+function AnonBadge({ level }: { level: 1 | 2 | 3 }) {
+  const cfg = {
+    1: { cls: 'anon-1', label: 'Anonymous' },
+    2: { cls: 'anon-2', label: 'Partial ID' },
+    3: { cls: 'anon-3', label: 'Full Reveal' },
+  }[level]
   if (!cfg) return null
-  return <span className={cfg.cls}>{cfg.label}</span>
+  const Icon = ANON_ICONS[level]
+  return <span className={cfg.cls}><Icon size={11} strokeWidth={2} style={{ marginRight: 2 }} />{cfg.label}</span>
 }

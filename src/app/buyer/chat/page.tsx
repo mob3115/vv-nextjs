@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
 import { getBuyerInbox } from '@/lib/actions/messaging'
+import { getIndustryIcon } from '@/lib/icons'
 import { BUYER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Messages' }
@@ -47,8 +48,8 @@ export default async function BuyerChatPage() {
               const label = listing?.business_name ?? `${listing?.industry ?? 'Business'} · ${listing?.location_region ?? ''}`
               return (
                 <a key={row.matchId} href={`/buyer/chat/${row.matchId}`} className="match-item" style={{ textDecoration: 'none' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.2rem', flexShrink: 0 }}>
-                    {listing?.industry_icon ?? '▣'}
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#A05500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+                    {(() => { const Icon = getIndustryIcon(listing?.industry); return <Icon size={20} strokeWidth={1.75} /> })()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

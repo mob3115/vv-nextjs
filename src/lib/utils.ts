@@ -48,16 +48,6 @@ export function formatCurrency(value: number): string {
   return `$${value}`
 }
 
-// Compatibility score breakdown
-export function scoreBreakdown(score: number) {
-  return [
-    { label: 'Values Match',  value: Math.round(score) },
-    { label: 'Industry Fit',  value: Math.min(100, Math.round(score * 0.95)) },
-    { label: 'Price Overlap', value: Math.min(100, Math.round(score * 0.88)) },
-    { label: 'Geography',     value: Math.min(100, Math.round(score * 0.92)) },
-  ]
-}
-
 // Server-side anonymity enforcement
 // Called in server actions / route handlers before sending data to client
 export function enforceAnonymity(listing: SellerListing, ndaSigned: boolean): SafeListing {
