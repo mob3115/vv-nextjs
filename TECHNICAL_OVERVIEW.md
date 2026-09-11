@@ -33,6 +33,7 @@ Defined in `supabase/migrations/`, applied in order:
 | `002_seller_swipes_and_mutual_matches.sql` | The `matches` UPDATE policy that was missing initially — without it a match could never flip from `pending` to `mutual` |
 | `003_messaging_and_nda_signing.sql` | NDA initials/template-version columns, a `conversations` UPDATE policy for the first-message race, a `messages` UPDATE policy for read receipts, and a trigger that locks every message column except `read_at` after creation |
 | `004_document_vault.sql` | `documents` table + `vault-documents` private Storage bucket, gated by match/NDA state |
+| `005_bidirectional_connection_requests.sql` | Adds an INSERT policy so a seller's "like" on a buyer can create a pending `matches` row too (previously only a buyer's like could insert one) — see §4a |
 
 **One landmine worth internalizing:** `matches.seller_id` is a foreign key
 to `seller_listings.id` (a *listing*), not to a user. `ndas.seller_id` and
@@ -88,6 +89,31 @@ queues.
 in `CORE_VALUES` has an actual entry in the engine's vector table — the two
 lists silently drifting apart is exactly the bug class that caused an
 earlier "values not saving correctly" report.
+
+## 4a. Bidirectional connection requests
+
+A "like" from either side now always creates or updates a `matches` row, so
+the other party always sees an incoming connection request — this is
+symmetric by design:
+
+- **Buyer likes a listing** → a pending match is created immediately; the
+  seller sees it on **Buyer Interest** (`seller/interests`), badged "New
+  Interest", with a Connect button to reciprocate.
+- **Seller likes a buyer** → a pending match is created immediately (this
+  used to be a no-op until the buyer had already liked first); the buyer
+  sees it on **My Matches** (`buyer/matches`), badged "Wants to Connect",
+  with a "Connect Back" button (`BuyerConnectButton`) to reciprocate.
+- Once both sides have liked, the match flips to `mutual` and messaging/NDA
+  unlock, regardless of which side liked first.
+
+This required a schema change, not just application code: the original
+INSERT policy on `matches` (migration 001) only allowed a row to be
+inserted when `buyer_id = auth.uid()`, since only a buyer's like ever
+created a row. Migration 005 adds a second, OR'd INSERT policy allowing a
+seller to insert a row for their own listing. `recordSwipe()`
+(`src/lib/actions/marketplace.ts`) mirrors the same "load-bearing
+`.select()`" defensive pattern used elsewhere in this codebase to catch a
+silently-rejected insert rather than reporting false success.
 
 ## 5. Application structure
 

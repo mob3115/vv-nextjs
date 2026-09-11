@@ -275,13 +275,12 @@ export async function getBuyerProfile() {
 // ============================================================
 // SWIPES — Record a swipe and create/update a match if liked
 //
-// Design decision: a buyer "like" immediately creates a match record
-// with status='pending' — this is what makes a listing show up in the
-// buyer's My Matches. A seller "like" never creates that record by
-// itself (a seller liking a buyer who has never touched the listing
-// shouldn't manufacture a "connection" on the buyer's side); it just
-// gets saved as a swipe, and flips an already-existing match to
-// 'mutual' if the buyer has liked too.
+// A "like" from either side always creates or updates a match record so
+// the other party can see it as an incoming connection request —
+// symmetric in both directions: a buyer liking a listing creates a
+// pending match the seller sees on Buyer Interest, and a seller liking a
+// buyer creates a pending match that buyer sees on My Matches. Once both
+// sides have liked, the match flips to 'mutual'.
 //
 // Both branches re-read *both* sides' swipe rows fresh via
 // getMatchState() every time either side likes, so it never matters
@@ -375,9 +374,8 @@ export async function recordSwipe(
     return { success: true, matched: isMutual }
   }
 
-  // 2b. Seller liking a buyer — flip the buyer's existing match to mutual.
-  // No match exists yet if the buyer hasn't liked back; in that case the
-  // swipe above is all there is to save for now (see design note above).
+  // 2b. Seller liking a buyer — create a pending match (if the buyer
+  // hasn't liked yet) or flip an existing one to mutual (if they have).
   if (targetBuyerId) {
     const { data: listing, error: listingError } = await supabase
       .from('seller_listings')
@@ -391,12 +389,42 @@ export async function recordSwipe(
     }
     if (!listing) return { success: true, matched: false } // no listing — nothing to connect against
 
-    const { buyerLiked, sellerLiked } = await getMatchState(
+    const { buyerLiked, sellerLiked, score } = await getMatchState(
       supabase, targetBuyerId, listing.id, user.id
     )
-    // Legitimate no-op when a seller likes a buyer through Discover Buyers who
-    // hasn't liked this listing back yet — nothing to flip to mutual yet.
-    if (!buyerLiked) return { success: true, matched: false }
+
+    // Seller is the first to like: create the pending match so the buyer
+    // sees a connection request waiting on them, symmetric with a buyer's
+    // like (branch 2a above) always creating one visible to the seller.
+    // Requires the "Sellers can create pending matches" INSERT policy
+    // (migration 005) — without it this insert is silently rejected by RLS.
+    if (!buyerLiked) {
+      const { data: createdRows, error: createError } = await supabase
+        .from('matches')
+        .upsert({
+          buyer_id: targetBuyerId,
+          seller_id: listing.id,
+          compatibility_score: score,
+          buyer_liked: false,
+          seller_liked: true,
+          status: 'pending',
+        }, { onConflict: 'buyer_id,seller_id' })
+        .select('id')
+
+      if (createError) {
+        console.error('match create error (seller-initiated):', createError)
+        return { error: 'Failed to connect. Please try again.' }
+      }
+      if (!createdRows || createdRows.length === 0) {
+        console.error('match create affected 0 rows for buyer', targetBuyerId, 'listing', listing.id,
+          '— check that migration 005 (seller-initiated matches INSERT policy) has been applied.')
+        return { error: 'Could not connect right now. Please try again in a moment.' }
+      }
+
+      revalidatePath('/seller/interests')
+      revalidatePath('/buyer/matches')
+      return { success: true, matched: false }
+    }
 
     // .select() here is load-bearing: without it, an UPDATE that Postgres
     // RLS silently filters down to 0 matched rows still comes back with
