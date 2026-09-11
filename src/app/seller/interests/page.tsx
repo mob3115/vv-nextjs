@@ -52,7 +52,7 @@ export default async function SellerInterestsPage() {
         <div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Buyer Interest</h1>
           <p style={{ fontSize: '0.8rem', color: '#929292', marginTop: 2 }}>
-            {list.length} buyer{list.length !== 1 ? 's' : ''} connected with your listing · Sorted by compatibility
+            {list.length} buyer{list.length !== 1 ? 's' : ''} connected or interested · Sorted by compatibility
           </p>
         </div>
       </div>
@@ -65,7 +65,7 @@ export default async function SellerInterestsPage() {
             <p style={{ fontSize: '0.84rem', maxWidth: 300, margin: '0 auto', lineHeight: 1.6 }}>
               {!listing
                 ? 'Create a listing first to start receiving buyer interest.'
-                : 'Buyers who swipe right on your listing will appear here.'}
+                : 'Buyers who swipe right on your listing — or buyers you connect with from Discover Buyers — will appear here.'}
             </p>
             {!listing && (
               <a href="/seller/listing" className="btn-primary" style={{ display: 'inline-block', marginTop: 16 }}>
@@ -102,8 +102,10 @@ export default async function SellerInterestsPage() {
                             <span className="badge-green">NDA ✓</span>
                           ) : match.status === 'mutual' ? (
                             <a href={`/seller/nda/${match.id}`} className="badge-warning" style={{ textDecoration: 'none' }}>NDA Pending</a>
+                          ) : match.seller_liked ? (
+                            <span className="badge-grey">Awaiting Buyer</span>
                           ) : (
-                            <span className="badge-grey">Not yet mutual</span>
+                            <span className="badge-warning">New Interest</span>
                           )}
                         </div>
                       </div>
@@ -135,12 +137,14 @@ export default async function SellerInterestsPage() {
                       )}
 
                       {/* Actions */}
-                      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
                         {match.status === 'mutual' ? (
                           <>
                             <a href={`/seller/chat/${match.id}`} className="btn-primary btn-sm">Open Chat →</a>
                             {!ndaSigned && <a href={`/seller/nda/${match.id}`} className="btn-ghost btn-sm">Request NDA</a>}
                           </>
+                        ) : match.seller_liked ? (
+                          <span style={{ fontSize: '0.78rem', color: '#6a6a6a' }}>You reached out — waiting on this buyer to connect back</span>
                         ) : (
                           <ConnectButton buyerId={match.buyer_id} matchId={match.id} />
                         )}

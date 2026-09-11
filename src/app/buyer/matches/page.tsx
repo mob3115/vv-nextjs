@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { getIndustryIcon } from '@/lib/icons'
+import { BuyerConnectButton } from '@/components/buyer/BuyerConnectButton'
 import { BUYER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'My Matches' }
@@ -38,8 +39,8 @@ export default async function BuyerMatchesPage() {
         {/* Stats */}
         <div className="stats-grid">
           {[
-            ['Connections', list.length, 'Businesses you liked'],
-            ['Mutual Matches', list.filter(m => m.seller_liked).length, 'Sellers also liked you'],
+            ['Mutual Matches', list.filter(m => m.status === 'mutual').length, 'Both sides connected'],
+            ['Awaiting Your Reply', list.filter(m => m.seller_liked && !m.buyer_liked).length, 'Sellers who want to connect'],
             ['NDAs Signed', list.filter(m => m.ndas?.some((n: any) => n.status === 'signed')).length, 'Full reveals unlocked'],
             ['Avg. Compatibility', list.length ? Math.round(list.reduce((a, m) => a + m.compatibility_score, 0) / list.length) + '%' : '—', 'Across all matches'],
           ].map(([label, value, meta]) => (
@@ -72,8 +73,13 @@ export default async function BuyerMatchesPage() {
                     {(() => { const Icon = getIndustryIcon(listing?.industry); return <Icon size={20} strokeWidth={1.75} /> })()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {ndaSigned ? listing?.business_name : listing?.revenue_band + ' ' + listing?.industry}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ndaSigned ? listing?.business_name : listing?.revenue_band + ' ' + listing?.industry}
+                      </div>
+                      {match.status !== 'mutual' && match.seller_liked && (
+                        <span className="badge-warning" style={{ fontSize: '0.65rem', flexShrink: 0 }}>Wants to Connect</span>
+                      )}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#929292', marginTop: 2 }}>
                       {listing?.industry} · {listing?.location_region} · Ask: {listing?.asking_range}
@@ -83,12 +89,15 @@ export default async function BuyerMatchesPage() {
                     <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.1rem', color: match.compatibility_score >= 85 ? '#4caf7d' : '#C46A00' }}>
                       {match.compatibility_score}
                     </div>
-                    {ndaSigned
-                      ? <span className="badge-green">NDA ✓</span>
-                      : <a href={`/buyer/nda/${match.id}`} className="badge-warning" style={{ textDecoration: 'none' }}>Sign NDA</a>
-                    }
+                    {match.status === 'mutual' && (
+                      ndaSigned
+                        ? <span className="badge-green">NDA ✓</span>
+                        : <a href={`/buyer/nda/${match.id}`} className="badge-warning" style={{ textDecoration: 'none' }}>Sign NDA</a>
+                    )}
                     {match.status === 'mutual' ? (
                       <a href={`/buyer/chat/${match.id}`} className="btn-primary btn-sm" style={{ textDecoration: 'none' }}>Message →</a>
+                    ) : match.seller_liked ? (
+                      <BuyerConnectButton listingId={match.seller_id} matchId={match.id} />
                     ) : (
                       <span style={{ fontSize: '0.7rem', color: '#6a6a6a' }}>Awaiting seller</span>
                     )}
