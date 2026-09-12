@@ -7,6 +7,7 @@ import { enforceAnonymity } from '@/lib/utils'
 import { NDA_TEMPLATE_VERSION } from '@/lib/nda-template'
 import { computeCompatibility } from '@/lib/matching'
 import { requireUser, resolveMatchParty } from './shared'
+import { logAuditEvent } from './audit'
 import type { SellerListingInput, BuyerProfileInput, NdaSignInput, SwipeInput } from '@/lib/validations'
 import type { ActionResult } from './auth'
 
@@ -320,11 +321,12 @@ async function upsertMatchOnLike(
   buyerId: string,
   listingId: string,
   sellerUserId: string,
-  likerSide: 'buyer' | 'seller'
+  likerSide: 'buyer' | 'seller',
+  actorId: string
 ): Promise<{ error?: string; matched: boolean }> {
   const { data: existing, error: fetchError } = await supabase
     .from('matches')
-    .select('id, buyer_liked, seller_liked')
+    .select('id, buyer_liked, seller_liked, status')
     .eq('buyer_id', buyerId)
     .eq('seller_id', listingId)
     .maybeSingle()
@@ -343,6 +345,7 @@ async function upsertMatchOnLike(
   const buyerLiked  = likerSide === 'buyer'  || !!existing?.buyer_liked  || swipeBuyerLiked
   const sellerLiked = likerSide === 'seller' || !!existing?.seller_liked || swipeSellerLiked
   const isMutual = buyerLiked && sellerLiked
+  const becameMutual = isMutual && existing?.status !== 'mutual'
 
   if (!existing) {
     const { data: createdRows, error } = await supabase
@@ -366,6 +369,13 @@ async function upsertMatchOnLike(
         '— check that the matches INSERT policies (migrations 001, 005) have been applied.')
       return { error: 'Could not connect right now. Please try again in a moment.', matched: false }
     }
+    if (becameMutual) {
+      await logAuditEvent(supabase, {
+        actorId, eventType: 'MATCH', action: 'MUTUAL',
+        resourceType: 'match', resourceId: createdRows[0].id,
+        metadata: { buyerId, listingId },
+      })
+    }
     return { matched: isMutual }
   }
 
@@ -388,6 +398,14 @@ async function upsertMatchOnLike(
     console.error('match update affected 0 rows for match', existing.id,
       '— check that migration 002 (matches UPDATE policy) has been applied.')
     return { error: 'Could not connect right now. Please try again in a moment.', matched: false }
+  }
+
+  if (becameMutual) {
+    await logAuditEvent(supabase, {
+      actorId, eventType: 'MATCH', action: 'MUTUAL',
+      resourceType: 'match', resourceId: existing.id,
+      metadata: { buyerId, listingId },
+    })
   }
 
   return { matched: isMutual }
@@ -434,7 +452,7 @@ export async function recordSwipe(
     }
     if (!listing) return { success: true, matched: false } // listing no longer exists — nothing to match against
 
-    const result = await upsertMatchOnLike(supabase, user.id, targetListingId, listing.seller_id, 'buyer')
+    const result = await upsertMatchOnLike(supabase, user.id, targetListingId, listing.seller_id, 'buyer', user.id)
     if (result.error) return { error: result.error }
 
     revalidatePath('/buyer/matches')
@@ -460,7 +478,7 @@ export async function recordSwipe(
     // Requires the "Sellers can create pending matches" INSERT policy
     // (migration 005) for the case where this is a brand new row — without
     // it that insert is silently rejected by RLS.
-    const result = await upsertMatchOnLike(supabase, targetBuyerId, listing.id, user.id, 'seller')
+    const result = await upsertMatchOnLike(supabase, targetBuyerId, listing.id, user.id, 'seller', user.id)
     if (result.error) return { error: result.error }
 
     revalidatePath('/seller/interests')
@@ -524,6 +542,15 @@ export async function signNda(input: NdaSignInput): Promise<ActionResult> {
     console.error('signNda error:', error)
     return { error: 'Failed to sign NDA. Please try again.' }
   }
+
+  await logAuditEvent(supabase, {
+    actorId: user.id,
+    eventType: 'NDA',
+    action: newStatus === 'signed' ? 'FULLY_SIGNED' : 'SIGN',
+    resourceType: 'nda',
+    resourceId: matchId,
+    metadata: { isBuyer, status: newStatus },
+  })
 
   revalidatePath('/buyer/nda')
   revalidatePath('/seller/interests')

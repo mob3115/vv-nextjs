@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireUser, resolveMatchParty } from './shared'
+import { logAuditEvent } from './audit'
 import type { ActionResult } from './auth'
 
 const BUCKET = 'vault-documents'
@@ -51,20 +52,29 @@ export async function uploadVaultDocument(formData: FormData): Promise<ActionRes
     return { error: 'Failed to upload document. Please try again.' }
   }
 
-  const { error: insertError } = await supabase.from('documents').insert({
+  const { data: created, error: insertError } = await supabase.from('documents').insert({
     seller_id: user.id,
     file_name: file.name,
     file_path: path,
     file_size: file.size,
     mime_type: file.type,
     tier,
-  })
+  }).select('id').single()
 
   if (insertError) {
     console.error('vault document insert error:', insertError)
     await admin.storage.from(BUCKET).remove([path]) // don't leave an orphaned file
     return { error: 'Failed to save document. Please try again.' }
   }
+
+  await logAuditEvent(supabase, {
+    actorId: user.id,
+    eventType: 'VAULT',
+    action: 'UPLOAD',
+    resourceType: 'document',
+    resourceId: created.id,
+    metadata: { fileName: file.name, tier },
+  })
 
   revalidatePath('/seller/vault')
   return { success: true }
@@ -91,6 +101,15 @@ export async function deleteVaultDocument(documentId: string): Promise<ActionRes
     console.error('vault delete error:', error)
     return { error: 'Failed to delete document. Please try again.' }
   }
+
+  await logAuditEvent(supabase, {
+    actorId: user.id,
+    eventType: 'VAULT',
+    action: 'DELETE',
+    resourceType: 'document',
+    resourceId: documentId,
+    metadata: { fileName: doc.file_path.split('/').pop() },
+  })
 
   revalidatePath('/seller/vault')
   return { success: true }

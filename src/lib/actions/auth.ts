@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { loginSchema, buyerRegisterSchema, sellerRegisterSchema } from '@/lib/validations'
 import { recomputeScoresForBuyer, recomputeScoresForListing } from './marketplace'
+import { logAuditEvent } from './audit'
 import type { LoginInput, BuyerRegisterInput, SellerRegisterInput } from '@/lib/validations'
 
 export type ActionResult = {
@@ -45,12 +46,23 @@ async function signUpAccount(email: string, password: string, fullName: string, 
     return { error: 'Registration failed. Please try again.' } as const
   }
 
+  // Same client the signUp call ran on, so it carries the fresh session
+  // when one was issued (RLS keeps this write scoped to the new user
+  // regardless); the admin client otherwise, for the no-session case above.
+  const db = data.session ? supabase : createAdminClient()
+
+  await logAuditEvent(db, {
+    actorId: data.user.id,
+    eventType: 'AUTH',
+    action: 'REGISTER',
+    resourceType: 'profile',
+    resourceId: data.user.id,
+    metadata: { role },
+  })
+
   return {
     userId: data.user.id,
-    // Same client the signUp call ran on, so it carries the fresh session
-    // when one was issued (RLS keeps this write scoped to the new user
-    // regardless); the admin client otherwise, for the no-session case above.
-    db: data.session ? supabase : createAdminClient(),
+    db,
     needsEmailConfirmation: !data.session,
   } as const
 }
@@ -163,7 +175,7 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
   const { email, password } = parsed.data
   const supabase = createClient()
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
     // Never reveal whether the email or password was wrong specifically
@@ -176,12 +188,24 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
     return { error: 'Sign in failed. Please try again.' }
   }
 
+  await logAuditEvent(supabase, {
+    actorId: data.user.id,
+    eventType: 'AUTH',
+    action: 'LOGIN',
+  })
+
   revalidatePath('/', 'layout')
   redirect('/buyer/discover') // middleware will re-route by role
 }
 
 export async function logoutAction(): Promise<void> {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user) {
+    await logAuditEvent(supabase, { actorId: user.id, eventType: 'AUTH', action: 'LOGOUT' })
+  }
+
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/auth/login')

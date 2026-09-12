@@ -34,7 +34,7 @@ export default async function AdminUsersPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Role', 'Joined', 'Actions'].map(h => (
+                {['Name', 'Email', 'Role', 'Joined'].map(h => (
                   <th key={h} style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', padding: '10px 14px', textAlign: 'left', borderBottom: '1px solid #2e2e2e', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -49,9 +49,6 @@ export default async function AdminUsersPage() {
                   </td>
                   <td style={{ padding: '12px 14px', color: '#929292', whiteSpace: 'nowrap' }}>
                     {new Date(u.created_at).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px 14px' }}>
-                    <button className="btn-ghost btn-sm" style={{ fontSize: '0.72rem' }}>View</button>
                   </td>
                 </tr>
               ))}

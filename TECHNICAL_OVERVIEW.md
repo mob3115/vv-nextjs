@@ -115,6 +115,29 @@ seller to insert a row for their own listing. `recordSwipe()`
 `.select()`" defensive pattern used elsewhere in this codebase to catch a
 silently-rejected insert rather than reporting false success.
 
+## 4b. Audit logging
+
+`audit_logs` (migration 001) existed from the start but nothing ever wrote
+to it — the Admin Audit Log page labeled itself "Immutable security event
+log · Tamper-evident" while silently showing nothing, forever. `logAuditEvent()`
+(`src/lib/actions/audit.ts`, no `'use server'` — same non-callable-helper
+pattern as `shared.ts`) is now called from the actions that actually
+constitute a security-relevant event:
+
+| Event type | Action | Where |
+|---|---|---|
+| `AUTH` | `REGISTER` | end of `signUpAccount()` — both `registerBuyerAction`/`registerSellerAction` |
+| `AUTH` | `LOGIN` / `LOGOUT` | `loginAction` / `logoutAction` |
+| `MATCH` | `MUTUAL` | `upsertMatchOnLike()`, only on the pending→mutual transition (not every subsequent swipe on an already-mutual match) |
+| `NDA` | `SIGN` / `FULLY_SIGNED` | `signNda()` |
+| `VAULT` | `UPLOAD` / `DELETE` | `uploadVaultDocument()` / `deleteVaultDocument()` |
+
+A failed audit insert is logged to the server console and swallowed —
+audit logging must never break the action it's attached to. `ADMIN`,
+`SYSTEM`, and `RATE_LIMIT` event types are still reserved (the admin page
+already has colors for them) but nothing emits them yet, since there's no
+real admin write-action or rate limiting in the app to log.
+
 ## 5. Application structure
 
 ```
@@ -230,3 +253,19 @@ before this pass — these were latent, not regressions introduced here):
   owning listing/profile is next edited. A one-off backfill script (or an
   admin-triggered recompute-all action) would be a reasonable addition if
   the algorithm changes again.
+- **No password reset flow.** There is no "Forgot password?" link, no
+  reset-request page, and no server action for it. `auth/confirm/route.ts`
+  has a half-wired `type=recovery` branch (it calls `verifyOtp` correctly)
+  but redirects to a generic "email confirmed" message either way and
+  there's no "set a new password" page for a recovery link to land on. A
+  real gap for production use, not just a missing UI affordance.
+- **Admin panel is list-only.** Overview/Users/Listings/Audit all read
+  real data (no fake/hardcoded rows), but there's no moderation action
+  anywhere — no role change, no suspend/remove a listing, no per-user
+  detail view. Two now-removed dead buttons (admin Users "View", seller
+  Buyer Interest "Pass") were previously present but non-functional; "Pass"
+  is now wired for real (see §4b's sibling change — it records a `pass`
+  swipe and the Buyer Interest query excludes buyers already passed on,
+  reusing the same exclude-by-swipe pattern `getDiscoverListings` uses),
+  "View" was removed outright since the admin Users table already renders
+  every column on the `profiles` row — there was nothing left to reveal.

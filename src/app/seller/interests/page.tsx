@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { ConnectButton } from '@/components/seller/ConnectButton'
+import { PassButton } from '@/components/seller/PassButton'
 import { SELLER_NAV } from '@/lib/nav'
 
 export const metadata: Metadata = { title: 'Buyer Interest' }
@@ -23,7 +24,18 @@ export default async function SellerInterestsPage() {
         .order('compatibility_score', { ascending: false })
     : { data: [] }
 
-  const list = matches ?? []
+  // Buyers this seller has already passed on drop out of the queue —
+  // same exclude-by-swipe pattern getDiscoverListings uses for listings a
+  // buyer already swiped on.
+  const { data: passedSwipes } = await supabase
+    .from('swipes')
+    .select('target_buyer_id')
+    .eq('swiper_id', user.id)
+    .eq('direction', 'pass')
+    .not('target_buyer_id', 'is', null)
+
+  const passedBuyerIds = new Set((passedSwipes ?? []).map((s: any) => s.target_buyer_id))
+  const list = (matches ?? []).filter((m: any) => !passedBuyerIds.has(m.buyer_id))
 
   // Step 2: fetch buyer profiles separately via profiles table (no RLS restriction)
   const buyerIds = list.map((m: any) => m.buyer_id).filter(Boolean)
@@ -148,7 +160,7 @@ export default async function SellerInterestsPage() {
                         ) : (
                           <ConnectButton buyerId={match.buyer_id} matchId={match.id} />
                         )}
-                        <button className="btn-ghost btn-sm">Pass</button>
+                        {match.status !== 'mutual' && <PassButton buyerId={match.buyer_id} />}
                       </div>
                     </div>
                   </div>
