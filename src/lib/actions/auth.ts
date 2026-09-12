@@ -2,26 +2,30 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { registerSchema, loginSchema } from '@/lib/validations'
-import type { RegisterInput, LoginInput } from '@/lib/validations'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { loginSchema, buyerRegisterSchema, sellerRegisterSchema } from '@/lib/validations'
+import { recomputeScoresForBuyer, recomputeScoresForListing } from './marketplace'
+import type { LoginInput, BuyerRegisterInput, SellerRegisterInput } from '@/lib/validations'
 
 export type ActionResult = {
   error?: string
   success?: boolean
 }
 
-export async function registerAction(input: RegisterInput): Promise<ActionResult> {
-  // Validate input server-side (never trust client validation alone)
-  const parsed = registerSchema.safeParse(input)
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
-  }
-
-  const { email, password, fullName, role } = parsed.data
+// Registration collects the account *and* the full buyer profile / seller
+// listing in one wizard, so there's no separate "now go build your profile"
+// or "now go create a listing" step after signing up — see registerAction's
+// former single-step version, replaced by these two.
+//
+// Supabase Auth requiring email confirmation (the default here — see
+// auth/confirm) means signUp() often returns no session yet, so the profile
+// row can't always be written through the user's own (still-unauthenticated)
+// client. Falling back to the admin client — scoped strictly to the id
+// Supabase just returned for *this* signup, never one supplied by the
+// client — writes the row immediately regardless, so it's ready the moment
+// the user confirms their email and logs in for the first time.
+async function signUpAccount(email: string, password: string, fullName: string, role: string) {
   const supabase = createClient()
-
-  // Sign up via Supabase Auth
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -32,21 +36,122 @@ export async function registerAction(input: RegisterInput): Promise<ActionResult
   })
 
   if (error) {
-    // Normalize Supabase error messages for the UI
     if (error.message.includes('already registered')) {
-      return { error: 'An account with this email already exists. Please sign in.' }
+      return { error: 'An account with this email already exists. Please sign in.' } as const
     }
-    return { error: error.message }
+    return { error: error.message } as const
   }
-
   if (!data.user) {
-    return { error: 'Registration failed. Please try again.' }
+    return { error: 'Registration failed. Please try again.' } as const
   }
 
-  // Profile row is created by a Supabase database trigger (see migration).
-  // We don't need to insert it here — the trigger handles it atomically.
+  return {
+    userId: data.user.id,
+    // Same client the signUp call ran on, so it carries the fresh session
+    // when one was issued (RLS keeps this write scoped to the new user
+    // regardless); the admin client otherwise, for the no-session case above.
+    db: data.session ? supabase : createAdminClient(),
+    needsEmailConfirmation: !data.session,
+  } as const
+}
 
-  return { success: true }
+export async function registerBuyerAction(
+  input: BuyerRegisterInput
+): Promise<ActionResult & { needsEmailConfirmation?: boolean }> {
+  const parsed = buyerRegisterSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  const { email, password, fullName, role, profile } = parsed.data
+
+  const signUpResult = await signUpAccount(email, password, fullName, role)
+  if ('error' in signUpResult) return { error: signUpResult.error }
+  const { userId, db, needsEmailConfirmation } = signUpResult
+
+  const { error: profileError } = await db.from('buyer_profiles').upsert({
+    buyer_id: userId,
+    background: profile.background,
+    looking_for: profile.lookingFor,
+    price_min: profile.priceMin,
+    price_max: profile.priceMax,
+    target_industries: profile.targetIndustries,
+    location_preference: profile.locationPreference,
+    funding_source: profile.fundingSource,
+    experience_years: profile.experienceYears,
+    values: profile.values,
+    values_statement: profile.valuesStatement,
+  }, { onConflict: 'buyer_id' })
+
+  if (profileError) {
+    console.error('registerBuyerAction profile error:', profileError)
+    return {
+      error: 'Your account was created, but saving your profile failed. Please sign in and complete it from My Profile.',
+    }
+  }
+
+  await recomputeScoresForBuyer(userId, {
+    values: profile.values,
+    target_industries: profile.targetIndustries,
+    price_min: profile.priceMin,
+    price_max: profile.priceMax,
+    location_preference: profile.locationPreference,
+  })
+
+  return { success: true, needsEmailConfirmation }
+}
+
+export async function registerSellerAction(
+  input: SellerRegisterInput
+): Promise<ActionResult & { needsEmailConfirmation?: boolean }> {
+  const parsed = sellerRegisterSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  const { email, password, fullName, listing } = parsed.data
+
+  const signUpResult = await signUpAccount(email, password, fullName, 'seller')
+  if ('error' in signUpResult) return { error: signUpResult.error }
+  const { userId, db, needsEmailConfirmation } = signUpResult
+
+  const { data: created, error: listingError } = await db.from('seller_listings').insert({
+    seller_id: userId,
+    status: 'active',
+    industry: listing.industry,
+    industry_icon: listing.industryIcon,
+    tagline: listing.tagline,
+    years_operating: listing.yearsOperating,
+    employees_range: listing.employeesRange,
+    revenue_band: listing.revenueBand,
+    asking_range: listing.askingRange,
+    location_region: listing.locationRegion,
+    values: listing.values,
+    values_statement: listing.valuesStatement,
+    transition_goals: listing.transitionGoals,
+    transition_timeline: listing.transitionTimeline,
+    seller_financing: listing.sellerFinancing,
+    management_training: listing.managementTraining,
+    anonymity_level: listing.anonymityLevel,
+    owner_first_name: listing.ownerFirstName,
+    location_city: listing.locationCity,
+    business_name: listing.businessName,
+    owner_full_name: listing.ownerFullName,
+    revenue_exact: listing.revenueExact,
+    asking_price_exact: listing.askingPriceExact,
+    ebitda: listing.ebitda,
+  }).select('id').single()
+
+  if (listingError) {
+    console.error('registerSellerAction listing error:', listingError)
+    return {
+      error: 'Your account was created, but publishing your listing failed. Please sign in and publish it from My Listing.',
+    }
+  }
+
+  await recomputeScoresForListing(created.id, {
+    industry: listing.industry, values: listing.values, asking_range: listing.askingRange, location_region: listing.locationRegion,
+  })
+
+  return { success: true, needsEmailConfirmation }
 }
 
 export async function loginAction(input: LoginInput): Promise<ActionResult> {

@@ -1,6 +1,9 @@
 import { z } from 'zod'
 
-export const registerSchema = z.object({
+// Shared by every registration schema below, so password/email/name rules
+// can't drift between the plain account schema and the combined
+// account+profile / account+listing onboarding schemas.
+const accountFields = {
   email: z.string().email('Please enter a valid email address'),
   password: z
     .string()
@@ -12,6 +15,10 @@ export const registerSchema = z.object({
     .string()
     .min(2, 'Full name must be at least 2 characters')
     .max(100, 'Full name is too long'),
+}
+
+export const registerSchema = z.object({
+  ...accountFields,
   role: z.enum(['buyer', 'seller', 'dual'], {
     errorMap: () => ({ message: 'Please select a role' }),
   }),
@@ -64,6 +71,21 @@ export const buyerProfileSchema = z.object({
   path: ['priceMax'],
 })
 
+// ---- Onboarding — account creation + full profile/listing in one submit ----
+// Used so a new buyer's complete profile (not just a throwaway values pick)
+// is saved during registration, and a new seller's listing goes live in the
+// same flow instead of requiring a separate "create a listing" step later.
+export const buyerRegisterSchema = z.object({
+  ...accountFields,
+  role: z.enum(['buyer', 'dual']),
+  profile: buyerProfileSchema,
+})
+
+export const sellerRegisterSchema = z.object({
+  ...accountFields,
+  listing: sellerListingSchema,
+})
+
 export const ndaSignSchema = z.object({
   signature: z.string().min(2, 'Please type your full legal name').max(200),
   initials: z
@@ -92,6 +114,8 @@ export type RegisterInput = z.infer<typeof registerSchema>
 export type LoginInput = z.infer<typeof loginSchema>
 export type SellerListingInput = z.infer<typeof sellerListingSchema>
 export type BuyerProfileInput = z.infer<typeof buyerProfileSchema>
+export type BuyerRegisterInput = z.infer<typeof buyerRegisterSchema>
+export type SellerRegisterInput = z.infer<typeof sellerRegisterSchema>
 export type NdaSignInput = z.infer<typeof ndaSignSchema>
 export type SwipeInput = z.infer<typeof swipeSchema>
 export type MessageInput = z.infer<typeof messageSchema>

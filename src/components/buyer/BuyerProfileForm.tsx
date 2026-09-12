@@ -5,13 +5,21 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { upsertBuyerProfile } from '@/lib/actions/marketplace'
 import { INDUSTRIES, FUNDING_SOURCES as FUNDING_OPTIONS, CORE_VALUES as ALL_VALUES, BUYER_LOCATION_PREFERENCES } from '@/lib/constants'
+import type { BuyerProfileInput } from '@/lib/validations'
 
 interface BuyerProfileFormProps {
   existing?: any
   fullName?: string
+  // When provided, the final submit hands the validated payload to this
+  // callback instead of calling upsertBuyerProfile() + redirecting itself —
+  // used to embed this form inside the registration wizard, where the
+  // profile is saved together with account creation in one combined submit
+  // (see RegisterForm) rather than through its own authenticated session.
+  onSubmit?: (payload: BuyerProfileInput) => void | Promise<void>
+  submitLabel?: string
 }
 
-export function BuyerProfileForm({ existing, fullName }: BuyerProfileFormProps) {
+export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: BuyerProfileFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -63,19 +71,26 @@ export function BuyerProfileForm({ existing, fullName }: BuyerProfileFormProps) 
       toast.error('Please fix the errors above')
       return
     }
+    const payload: BuyerProfileInput = {
+      background,
+      lookingFor,
+      priceMin: Number(priceMin.replace(/[,$]/g, '')),
+      priceMax: Number(priceMax.replace(/[,$]/g, '')),
+      targetIndustries: industries,
+      locationPreference: location,
+      fundingSource: funding as any,
+      experienceYears: experience,
+      values,
+      valuesStatement,
+    }
+
+    if (onSubmit) {
+      startTransition(async () => { await onSubmit(payload) })
+      return
+    }
+
     startTransition(async () => {
-      const result = await upsertBuyerProfile({
-        background,
-        lookingFor,
-        priceMin: Number(priceMin.replace(/[,$]/g, '')),
-        priceMax: Number(priceMax.replace(/[,$]/g, '')),
-        targetIndustries: industries,
-        locationPreference: location,
-        fundingSource: funding as any,
-        experienceYears: experience,
-        values,
-        valuesStatement,
-      })
+      const result = await upsertBuyerProfile(payload)
       if (result?.error) {
         toast.error(result.error)
       } else {
@@ -277,7 +292,7 @@ export function BuyerProfileForm({ existing, fullName }: BuyerProfileFormProps) 
           disabled={isPending}
           style={{ background: '#A05500', color: '#fff', border: 'none', borderRadius: 8, padding: '14px 36px', fontSize: '0.95rem', fontWeight: 700, cursor: isPending ? 'not-allowed' : 'pointer', opacity: isPending ? 0.7 : 1, fontFamily: 'inherit' }}
         >
-          {isPending ? 'Saving…' : existing ? 'Save Changes ✓' : 'Save Profile & Start Discovering →'}
+          {isPending ? 'Saving…' : submitLabel ?? (existing ? 'Save Changes ✓' : 'Save Profile & Start Discovering →')}
         </button>
       </div>
     </div>

@@ -23,7 +23,7 @@ import type { ActionResult } from './auth'
 // party through this path.
 // ============================================================
 
-async function recomputeScoresForBuyer(buyerId: string, buyer: {
+export async function recomputeScoresForBuyer(buyerId: string, buyer: {
   values: string[]; target_industries: string[]; price_min: number; price_max: number; location_preference: string
 }) {
   const admin = createAdminClient()
@@ -54,7 +54,7 @@ async function recomputeScoresForBuyer(buyerId: string, buyer: {
   if (error) console.error('recomputeScoresForBuyer upsert error:', error)
 }
 
-async function recomputeScoresForListing(listingId: string, listing: {
+export async function recomputeScoresForListing(listingId: string, listing: {
   industry: string; values: string[]; asking_range: string; location_region: string
 }) {
   const admin = createAdminClient()
