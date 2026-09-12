@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { recordSwipe } from '@/lib/actions/marketplace'
 import { Confetti } from '@/components/shared/Confetti'
 import { SWIPE_ICONS, MISC_ICONS } from '@/lib/icons'
 import { ScoreRing } from '@/components/ui/ScoreRing'
+import { useSwipeDeck } from '@/hooks/useSwipeDeck'
 import { scoreColor } from '@/lib/utils'
 
 interface BuyerCard {
@@ -40,166 +41,28 @@ const FUNDING_LABELS: Record<string, string> = {
   combination: 'Combination',
 }
 
-export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
-  const [queue, setQueue] = useState<BuyerCard[]>(buyers)
-  const [swiping, setSwiping] = useState(false)
-  const [overlayState, setOverlayState] = useState<'connect' | 'pass' | null>(null)
-  const [overlayOpacity, setOverlayOpacity] = useState(0)
+export function SellerSwipeArena({ buyers }: SellerSwipeArenaProps) {
   const [celebrate, setCelebrate] = useState(0)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const startX = useRef(0)
-  const startY = useRef(0)
-  const curX = useRef(0)
-  const isDragging = useRef(false)
   const router = useRouter()
 
-  const current = queue[0]
-  const next1   = queue[1]
-  const next2   = queue[2]
-
-  useEffect(() => {
-    const card = cardRef.current
-    if (card) {
-      card.style.transform = ''
-      card.style.opacity = '1'
-      card.style.transition = ''
-    }
-    setOverlayState(null)
-    setOverlayOpacity(0)
-    isDragging.current = false
-  }, [queue])
-
-  const doSwipe = useCallback(async (direction: 'connect' | 'pass', buyer: BuyerCard) => {
-    if (swiping) return
-    setSwiping(true)
-
-    const card = cardRef.current
-    if (card) {
-      card.style.transition = 'transform 0.28s ease, opacity 0.28s ease'
-      card.style.transform = direction === 'connect'
-        ? 'translate(140%, -20px) rotate(18deg)'
-        : 'translate(-140%, -20px) rotate(-18deg)'
-      card.style.opacity = '0'
-    }
-
-    // Fire and forget — don't block the UI
-    recordSwipe({ targetBuyerId: buyer.id, direction: direction === 'connect' ? 'like' : 'pass' })
-      .then(result => {
-        if (result.matched) {
-          toast.success(`It's a match with ${buyer.full_name}!`)
-          setCelebrate(c => c + 1)
-        } else if (direction === 'connect') {
-          toast.success(`Connection request sent to ${buyer.full_name}!`)
-        }
-        router.refresh()
-      })
-      .catch(() => toast.error('Something went wrong'))
-
-    setTimeout(() => {
-      setQueue(q => q.slice(1))
-      setSwiping(false)
-    }, 290)
-  }, [swiping, router])
-
-  // Touch handlers
-  useEffect(() => {
-    const card = cardRef.current
-    if (!card || !current) return
-
-    function onTouchStart(e: TouchEvent) {
-      if (swiping) return
-      const t = e.touches[0]
-      startX.current = t.clientX
-      startY.current = t.clientY
-      curX.current = 0
-      isDragging.current = false
-      card.style.transition = 'none'
-    }
-
-    function onTouchMove(e: TouchEvent) {
-      if (swiping) return
-      const t = e.touches[0]
-      const dx = t.clientX - startX.current
-      const dy = t.clientY - startY.current
-      if (!isDragging.current) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
-        if (Math.abs(dy) > Math.abs(dx) * 1.2) return
-        isDragging.current = true
-      }
-      e.preventDefault()
-      curX.current = dx
-      card.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${dx * 0.07}deg)`
-      const progress = Math.min(Math.abs(dx) / 100, 1)
-      if (dx > 10)       { setOverlayState('connect'); setOverlayOpacity(progress) }
-      else if (dx < -10) { setOverlayState('pass');    setOverlayOpacity(progress) }
-      else               { setOverlayState(null);      setOverlayOpacity(0) }
-    }
-
-    function onTouchEnd() {
-      if (swiping || !isDragging.current) return
-      const x = curX.current
-      if (x > 65)       doSwipe('connect', current)
-      else if (x < -65) doSwipe('pass', current)
-      else {
-        card.style.transition = 'transform 0.22s ease'
-        card.style.transform = ''
-        setOverlayState(null)
-        setOverlayOpacity(0)
-      }
-      isDragging.current = false
-      curX.current = 0
-    }
-
-    card.addEventListener('touchstart', onTouchStart, { passive: true })
-    card.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    card.addEventListener('touchend',   onTouchEnd,   { passive: true })
-    return () => {
-      card.removeEventListener('touchstart', onTouchStart)
-      card.removeEventListener('touchmove',  onTouchMove)
-      card.removeEventListener('touchend',   onTouchEnd)
-    }
-  }, [current, swiping, doSwipe])
-
-  // Mouse handlers
-  function onMouseDown(e: React.MouseEvent) {
-    if (swiping) return
-    startX.current = e.clientX
-    startY.current = e.clientY
-    curX.current = 0
-    isDragging.current = true
-    if (cardRef.current) cardRef.current.style.transition = 'none'
-  }
-
-  function onMouseMove(e: React.MouseEvent) {
-    if (!isDragging.current || swiping) return
-    const dx = e.clientX - startX.current
-    const dy = e.clientY - startY.current
-    curX.current = dx
-    if (cardRef.current) {
-      cardRef.current.style.transform = `translate(${dx}px, ${dy * 0.35}px) rotate(${dx * 0.07}deg)`
-    }
-    const progress = Math.min(Math.abs(dx) / 100, 1)
-    if (dx > 10)       { setOverlayState('connect'); setOverlayOpacity(progress) }
-    else if (dx < -10) { setOverlayState('pass');    setOverlayOpacity(progress) }
-    else               { setOverlayState(null);      setOverlayOpacity(0) }
-  }
-
-  function onMouseUp() {
-    if (!isDragging.current || !current) return
-    isDragging.current = false
-    const x = curX.current
-    if (x > 65)       doSwipe('connect', current)
-    else if (x < -65) doSwipe('pass', current)
-    else {
-      if (cardRef.current) {
-        cardRef.current.style.transition = 'transform 0.22s ease'
-        cardRef.current.style.transform = ''
-      }
-      setOverlayState(null)
-      setOverlayOpacity(0)
-    }
-    curX.current = 0
-  }
+  const { current, next1, next2, queueLength, swiping, overlay, cardRef, swipe, cardHandlers } = useSwipeDeck<BuyerCard>({
+    items: buyers,
+    onSwipe: (direction, buyer) => {
+      const isConnect = direction === 'right'
+      // Fire and forget — don't block the UI
+      recordSwipe({ targetBuyerId: buyer.id, direction: isConnect ? 'like' : 'pass' })
+        .then(result => {
+          if (result.matched) {
+            toast.success(`It's a match with ${buyer.full_name}!`)
+            setCelebrate(c => c + 1)
+          } else if (isConnect) {
+            toast.success(`Connection request sent to ${buyer.full_name}!`)
+          }
+          router.refresh()
+        })
+        .catch(() => toast.error('Something went wrong'))
+    },
+  })
 
   if (!current) {
     return (
@@ -253,10 +116,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
               ref={cardRef}
               className="swipe-card top"
               style={{ cursor: swiping ? 'default' : 'grab', userSelect: 'none', touchAction: 'none' }}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={onMouseUp}
-              onMouseLeave={onMouseUp}
+              onMouseDown={cardHandlers.onMouseDown}
             >
               {/* Accent bar */}
               <div style={{ height: 5, background: 'linear-gradient(90deg,#A05500,#C46A00)' }} />
@@ -344,17 +204,17 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '10px 20px', borderTop: '1px solid #2e2e2e', background: '#141414', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.75rem', color: '#929292' }}>V+V Buyer</span>
                 <span style={{ fontSize: '0.75rem', color: '#C46A00', fontWeight: 600 }}>
-                  {queue.length - 1} more in queue
+                  {queueLength - 1} more in queue
                 </span>
               </div>
 
               {/* CONNECT overlay */}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(76,175,125,0.22)', color: '#4caf7d', opacity: overlayState === 'connect' ? overlayOpacity : 0, transition: 'opacity 0.08s' }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(76,175,125,0.22)', color: '#4caf7d', opacity: overlay?.direction === 'right' ? overlay.opacity : 0, transition: 'opacity 0.08s' }}>
                 CONNECT
               </div>
 
               {/* PASS overlay */}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(212,95,95,0.18)', color: '#d45f5f', opacity: overlayState === 'pass' ? overlayOpacity : 0, transition: 'opacity 0.08s' }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(212,95,95,0.18)', color: '#d45f5f', opacity: overlay?.direction === 'left' ? overlay.opacity : 0, transition: 'opacity 0.08s' }}>
                 PASS
               </div>
             </div>
@@ -363,7 +223,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <button
-              onClick={() => !swiping && doSwipe('pass', current)}
+              onClick={() => !swiping && swipe('left', current)}
               disabled={swiping}
               aria-label="Pass"
               style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}
@@ -371,7 +231,7 @@ export function SellerSwipeArena({ buyers, sellerId }: SellerSwipeArenaProps) {
               <SWIPE_ICONS.pass size={22} strokeWidth={2} />
             </button>
             <button
-              onClick={() => !swiping && doSwipe('connect', current)}
+              onClick={() => !swiping && swipe('right', current)}
               disabled={swiping}
               aria-label="Connect"
               style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}
