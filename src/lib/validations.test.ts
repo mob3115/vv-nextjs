@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   registerSchema, loginSchema, ndaSignSchema, swipeSchema, messageSchema, buyerProfileSchema,
+  buyerRegisterSchema, sellerRegisterSchema, sellerListingSchema,
 } from './validations'
+import type { SellerListingInput } from './validations'
 
 describe('registerSchema', () => {
   const valid = { email: 'a@b.com', password: 'Str0ng!Pass', fullName: 'Jane Doe', role: 'buyer' as const }
@@ -156,5 +158,109 @@ describe('buyerProfileSchema', () => {
   it('rejects an invalid funding source', () => {
     const result = buyerProfileSchema.safeParse({ ...valid, fundingSource: 'crypto' })
     expect(result.success).toBe(false)
+  })
+})
+
+const validSellerListing: SellerListingInput = {
+  industry: 'Healthcare',
+  industryIcon: 'Healthcare',
+  tagline: 'A'.repeat(15),
+  yearsOperating: 12,
+  employeesRange: '11–20',
+  revenueBand: '$1M–$2M',
+  askingRange: '$2M–$4M',
+  locationRegion: 'Midwest',
+  values: ['Integrity'],
+  valuesStatement: 'B'.repeat(55),
+  transitionGoals: 'C'.repeat(25),
+  transitionTimeline: '6–12 months',
+  sellerFinancing: false,
+  managementTraining: false,
+  anonymityLevel: 1,
+  ownerFirstName: 'Jane',
+  locationCity: 'Cleveland, OH',
+  businessName: 'Ironwood Fabrication Co.',
+  ownerFullName: 'Jane Doe',
+  revenueExact: '$1,800,000',
+  askingPriceExact: '$3,200,000',
+  ebitda: '',
+}
+
+describe('sellerListingSchema', () => {
+  it('accepts a valid listing', () => {
+    expect(sellerListingSchema.safeParse(validSellerListing).success).toBe(true)
+  })
+
+  it('rejects a tagline under 10 characters', () => {
+    expect(sellerListingSchema.safeParse({ ...validSellerListing, tagline: 'short' }).success).toBe(false)
+  })
+
+  it('rejects more than 5 values', () => {
+    expect(sellerListingSchema.safeParse({ ...validSellerListing, values: ['a', 'b', 'c', 'd', 'e', 'f'] }).success).toBe(false)
+  })
+
+  it('rejects an invalid anonymity level', () => {
+    expect(sellerListingSchema.safeParse({ ...validSellerListing, anonymityLevel: 4 }).success).toBe(false)
+  })
+})
+
+// ---- Onboarding: registration + full profile/listing combined ----
+describe('buyerRegisterSchema', () => {
+  const validBuyerProfile = {
+    background: 'A'.repeat(25),
+    lookingFor: 'B'.repeat(25),
+    priceMin: 500_000,
+    priceMax: 1_000_000,
+    targetIndustries: ['Healthcare'],
+    locationPreference: 'Midwest',
+    fundingSource: 'cash' as const,
+    experienceYears: '10 years',
+    values: ['Integrity'],
+    valuesStatement: 'C'.repeat(55),
+  }
+  const valid = {
+    email: 'a@b.com', password: 'Str0ng!Pass', fullName: 'Jane Doe',
+    role: 'buyer' as const, profile: validBuyerProfile,
+  }
+
+  it('accepts a valid buyer registration with a complete profile', () => {
+    expect(buyerRegisterSchema.safeParse(valid).success).toBe(true)
+  })
+
+  it('accepts role "dual" (buyers who also plan to sell)', () => {
+    expect(buyerRegisterSchema.safeParse({ ...valid, role: 'dual' }).success).toBe(true)
+  })
+
+  it('rejects role "seller" (sellers register through sellerRegisterSchema instead)', () => {
+    expect(buyerRegisterSchema.safeParse({ ...valid, role: 'seller' }).success).toBe(false)
+  })
+
+  it('rejects an incomplete profile (missing required fields still enforced)', () => {
+    const { valuesStatement, ...incomplete } = validBuyerProfile
+    expect(buyerRegisterSchema.safeParse({ ...valid, profile: incomplete }).success).toBe(false)
+  })
+
+  it('rejects a weak password, same rules as plain registerSchema', () => {
+    expect(buyerRegisterSchema.safeParse({ ...valid, password: 'weak' }).success).toBe(false)
+  })
+})
+
+describe('sellerRegisterSchema', () => {
+  const valid = {
+    email: 'a@b.com', password: 'Str0ng!Pass', fullName: 'Jane Doe',
+    listing: validSellerListing,
+  }
+
+  it('accepts a valid seller registration with a complete listing', () => {
+    expect(sellerRegisterSchema.safeParse(valid).success).toBe(true)
+  })
+
+  it('rejects an incomplete listing (missing required fields still enforced)', () => {
+    const { businessName, ...incomplete } = validSellerListing
+    expect(sellerRegisterSchema.safeParse({ ...valid, listing: incomplete }).success).toBe(false)
+  })
+
+  it('rejects a weak password, same rules as plain registerSchema', () => {
+    expect(sellerRegisterSchema.safeParse({ ...valid, password: 'weak' }).success).toBe(false)
   })
 })

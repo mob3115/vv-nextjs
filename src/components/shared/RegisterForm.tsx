@@ -1,40 +1,23 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { registerAction } from '@/lib/actions/auth'
+import { registerBuyerAction, registerSellerAction } from '@/lib/actions/auth'
+import { BuyerProfileForm } from '@/components/buyer/BuyerProfileForm'
+import { ListingForm } from '@/components/seller/ListingForm'
+import type { BuyerProfileInput, SellerListingInput } from '@/lib/validations'
 
 type Role = 'buyer' | 'seller' | 'dual'
 
-const VALUES_LIST = [
-  'Investing Local',
-  'Craftsmanship',
-  'Employee Wellbeing',
-  'Long Term Investment',
-  'Equity',
-  'Environmental Stewardship',
-  'Employee Ownership',
-  'Accessible to All',
-  'Worker Safety',
-  'Creative Excellence',
-  'Economic Mobility',
-  'Free Enterprise',
-  'Conscious Capitalism',
-  'Compassionate Care',
-  'Sustainability',
-  'Workforce Development',
-  'Customer Focused',
-  'Resident Dignity',
-  'Excellence & Quality',
-  'Family Values',
-  'Innovation & Discovery',
-  'Individual Responsibility',
-  'Integrity',
-  'Client Stewardship',
-]
-
-const STEPS = ['Your Role', 'Account', 'Your Values', 'Done']
+// Registration is one continuous flow — account, then the *complete* buyer
+// profile or seller listing, right here, before "Done". There is no
+// separate "now go build your profile" or "now go create a listing" step
+// afterward: BuyerProfileForm / ListingForm are embedded directly (in
+// "collect" mode — see their onSubmit prop) and their payload is submitted
+// together with account creation via registerBuyerAction/registerSellerAction.
+const BUYER_STEPS = ['Your Role', 'Account', 'Your Profile', 'Done']
+const SELLER_STEPS = ['Your Role', 'Account', 'List Your Business', 'Done']
 
 export function RegisterForm() {
   const [step, setStep] = useState(0)
@@ -43,20 +26,9 @@ export function RegisterForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [selectedValues, setSelectedValues] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isPending, startTransition] = useTransition()
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(true)
   const router = useRouter()
-
-  function toggleValue(v: string) {
-    setSelectedValues(prev =>
-      prev.includes(v)
-        ? prev.filter(x => x !== v)
-        : prev.length >= 5
-          ? (toast.error('Select up to 5 values'), prev)
-          : [...prev, v]
-    )
-  }
 
   function validateStep(s: number): boolean {
     const errs: Record<string, string> = {}
@@ -69,7 +41,6 @@ export function RegisterForm() {
       if (!/[^A-Za-z0-9]/.test(password)) errs.password = 'Must include at least one special character'
       if (password !== confirmPassword) errs.confirmPassword = 'Passwords do not match'
     }
-    if (s === 2 && selectedValues.length === 0) errs.values = 'Please select at least one value'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -79,23 +50,47 @@ export function RegisterForm() {
     setStep(s => Math.min(s + 1, 3))
   }
 
-  function handleSubmit() {
-    if (!validateStep(2)) return
-    startTransition(async () => {
-      const result = await registerAction({ email: email.trim(), password, fullName: fullName.trim(), role })
-      if (result?.error) {
-        setErrors({ submit: result.error })
-        setStep(1)
-      } else {
-        setStep(3)
-      }
+  async function handleProfileSubmit(profile: BuyerProfileInput) {
+    const result = await registerBuyerAction({
+      email: email.trim(),
+      password,
+      fullName: fullName.trim(),
+      role: role === 'dual' ? 'dual' : 'buyer',
+      profile,
     })
+
+    if (result?.error) {
+      toast.error(result.error)
+      setStep(1)
+      return
+    }
+    setNeedsEmailConfirmation(!!result.needsEmailConfirmation)
+    setStep(3)
   }
+
+  async function handleListingSubmit(listing: SellerListingInput) {
+    const result = await registerSellerAction({
+      email: email.trim(),
+      password,
+      fullName: fullName.trim(),
+      listing,
+    })
+
+    if (result?.error) {
+      toast.error(result.error)
+      setStep(1)
+      return
+    }
+    setNeedsEmailConfirmation(!!result.needsEmailConfirmation)
+    setStep(3)
+  }
+
+  const stepLabels = role === 'seller' ? SELLER_STEPS : BUYER_STEPS
 
   // Step bar
   const StepBar = () => (
     <div className="flex items-center gap-0 mb-8">
-      {STEPS.map((label, i) => (
+      {stepLabels.map((label, i) => (
         <div key={i} className="flex items-center flex-1 last:flex-none">
           <div className="flex flex-col items-center">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all ${
@@ -109,7 +104,7 @@ export function RegisterForm() {
               {label}
             </span>
           </div>
-          {i < STEPS.length - 1 && (
+          {i < stepLabels.length - 1 && (
             <div className={`flex-1 h-0.5 mx-1 ${i < step ? 'bg-orange' : 'bg-grey-border'}`} />
           )}
         </div>
@@ -128,7 +123,7 @@ export function RegisterForm() {
           ['buyer',  '🔍', 'Buyer',  'Find businesses to acquire'],
           ['seller', '🏢', 'Seller', 'List your business for sale'],
           ['dual',   '⇄',  'Both',   'Buyer and seller access'],
-        ] as [Role, string, string, string][]).map(([r, icon, label, desc]) => (
+        ] as [Role, string, string, string][]).map(([r, icon, roleLabel, desc]) => (
           <button
             key={r}
             type="button"
@@ -140,7 +135,7 @@ export function RegisterForm() {
             }`}
           >
             <span className="block text-2xl mb-2">{icon}</span>
-            <span className="block text-sm font-semibold">{label}</span>
+            <span className="block text-sm font-semibold">{roleLabel}</span>
             <span className="block text-xs mt-1 opacity-70">{desc}</span>
           </button>
         ))}
@@ -209,7 +204,6 @@ export function RegisterForm() {
           />
           {errors.confirmPassword && <p className="form-error">{errors.confirmPassword}</p>}
         </div>
-        {errors.submit && <p className="form-error text-center" role="alert">{errors.submit}</p>}
       </div>
       <div className="flex gap-3 mt-6">
         <button type="button" onClick={() => setStep(0)} className="btn-ghost">← Back</button>
@@ -218,45 +212,34 @@ export function RegisterForm() {
     </div>
   )
 
-  // ---- Step 2: Values ----
+  // ---- Step 2: Full profile (buyer/dual) or full listing (seller) ----
   if (step === 2) return (
     <div>
       <StepBar />
-      <h2 className="text-xl font-bold text-white mb-1.5">What do you stand for?</h2>
-      <p className="text-sm text-grey-dark mb-5">
-        Choose your top 3–5 values. These power your compatibility matches.
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-        {VALUES_LIST.map(v => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => toggleValue(v)}
-            className={`px-3 py-2 rounded-sm border text-xs text-center transition-all ${
-              selectedValues.includes(v)
-                ? 'border-orange bg-orange/8 text-orange-light'
-                : 'border-grey-border bg-black-deep text-grey-dark hover:border-orange hover:text-white'
-            }`}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
-      {errors.values && <p className="form-error mb-3">{errors.values}</p>}
-      <p className="text-xs text-grey-mid mb-5">
-        {selectedValues.length}/5 values selected
-      </p>
-      <div className="flex gap-3">
-        <button type="button" onClick={() => setStep(1)} className="btn-ghost">← Back</button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isPending}
-          className="btn-primary flex-1"
-        >
-          {isPending ? 'Creating account…' : 'Create Account →'}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => {
+          // BuyerProfileForm/ListingForm hold their own field state — going
+          // back unmounts whichever is showing, so anything typed on this
+          // step would otherwise vanish silently.
+          if (confirm('Go back to edit your account details? Anything you\'ve entered on this step will be cleared.')) {
+            setStep(1)
+          }
+        }}
+        className="text-xs text-grey-dark hover:text-white mb-4"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        ← Back to account details
+      </button>
+      {role === 'seller' ? (
+        <ListingForm onSubmit={handleListingSubmit} submitLabel="List My Business →" />
+      ) : (
+        <BuyerProfileForm
+          fullName={fullName}
+          onSubmit={handleProfileSubmit}
+          submitLabel="Save Profile & Create Account →"
+        />
+      )}
     </div>
   )
 
@@ -266,10 +249,24 @@ export function RegisterForm() {
       <StepBar />
       <div className="text-5xl mb-5">🎉</div>
       <h2 className="text-xl font-bold text-white mb-3">You&apos;re in.</h2>
-      <p className="text-sm text-grey-dark leading-relaxed max-w-xs mx-auto mb-2">
-        Check your email to confirm your account. Once confirmed, you can sign in and start discovering matches.
-      </p>
-      <p className="text-xs text-grey-mid mb-6">(Demo accounts are pre-confirmed — sign in directly.)</p>
+      {role === 'seller' ? (
+        <p className="text-sm text-grey-dark leading-relaxed max-w-xs mx-auto mb-2">
+          Your listing is live and saved to My Listing.{' '}
+          {needsEmailConfirmation
+            ? 'Check your email to confirm your account, then sign in to start reviewing buyer interest.'
+            : 'You can sign in now to start reviewing buyer interest.'}
+        </p>
+      ) : (
+        <p className="text-sm text-grey-dark leading-relaxed max-w-xs mx-auto mb-2">
+          Your buyer profile is saved to My Profile.{' '}
+          {needsEmailConfirmation
+            ? 'Check your email to confirm your account, then sign in to start discovering matches.'
+            : 'You can sign in now to start discovering matches.'}
+        </p>
+      )}
+      {needsEmailConfirmation && (
+        <p className="text-xs text-grey-mid mb-6">(Demo accounts are pre-confirmed — sign in directly.)</p>
+      )}
       <button
         type="button"
         onClick={() => router.push('/auth/login')}

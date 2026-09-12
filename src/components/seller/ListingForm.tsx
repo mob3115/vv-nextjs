@@ -6,14 +6,23 @@ import toast from 'react-hot-toast'
 import { createSellerListing, updateSellerListing } from '@/lib/actions/marketplace'
 import { getIndustryIcon, ANON_ICONS } from '@/lib/icons'
 import { INDUSTRIES, REVENUE_BANDS, TRANSITION_TIMELINES as TIMELINES, CORE_VALUES as ALL_VALUES, REGIONS } from '@/lib/constants'
+import type { SellerListingInput } from '@/lib/validations'
 
 interface ListingFormProps {
   existing?: any  // existing listing data for edit mode
+  // When provided, the final submit hands the validated payload to this
+  // callback instead of calling createSellerListing()/updateSellerListing()
+  // + redirecting itself — used to embed this form inside the registration
+  // wizard, where the listing is published together with account creation
+  // in one combined submit (see RegisterForm) rather than through its own
+  // authenticated session.
+  onSubmit?: (payload: SellerListingInput) => void | Promise<void>
+  submitLabel?: string
 }
 
 type Step = 1 | 2 | 3 | 4
 
-export function ListingForm({ existing }: ListingFormProps) {
+export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProps) {
   const isEdit = !!existing
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -95,33 +104,38 @@ export function ListingForm({ existing }: ListingFormProps) {
 
   function handleSubmit() {
     if (!validateStep(3)) return
-    startTransition(async () => {
-      const payload = {
-        industry,
-        industryIcon: industry, // icon is now always derived from the industry itself
-        businessName,
-        ownerFullName,
-        ownerFirstName,
-        tagline,
-        yearsOperating: Number(yearsOp),
-        employeesRange: employees,
-        locationCity,
-        locationRegion,
-        revenueBand,
-        askingRange,
-        revenueExact,
-        askingPriceExact,
-        ebitda,
-        sellerFinancing,
-        managementTraining,
-        values,
-        valuesStatement,
-        transitionGoals,
-        transitionTimeline: timeline,
-        anonymityLevel,
-        status: 'active',
-      }
+    const payload = {
+      industry,
+      industryIcon: industry, // icon is now always derived from the industry itself
+      businessName,
+      ownerFullName,
+      ownerFirstName,
+      tagline,
+      yearsOperating: Number(yearsOp),
+      employeesRange: employees,
+      locationCity,
+      locationRegion,
+      revenueBand,
+      askingRange,
+      revenueExact,
+      askingPriceExact,
+      ebitda,
+      sellerFinancing,
+      managementTraining,
+      values,
+      valuesStatement,
+      transitionGoals,
+      transitionTimeline: timeline,
+      anonymityLevel,
+      status: 'active',
+    }
 
+    if (onSubmit) {
+      startTransition(async () => { await onSubmit(payload) })
+      return
+    }
+
+    startTransition(async () => {
       const result = isEdit
         ? await updateSellerListing({ ...payload, id: existing.id })
         : await createSellerListing(payload)
@@ -542,7 +556,7 @@ export function ListingForm({ existing }: ListingFormProps) {
           disabled={isPending}
           style={{ background: '#A05500', color: '#fff', border: 'none', borderRadius: 8, padding: '14px 36px', fontSize: '0.95rem', fontWeight: 700, cursor: isPending ? 'not-allowed' : 'pointer', opacity: isPending ? 0.7 : 1, fontFamily: 'inherit' }}
         >
-          {isPending ? 'Saving…' : isEdit ? 'Save Changes ✓' : 'Publish Listing →'}
+          {isPending ? 'Saving…' : submitLabel ?? (isEdit ? 'Save Changes ✓' : 'Publish Listing →')}
         </button>
       </div>
     </div>
