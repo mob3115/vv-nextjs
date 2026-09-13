@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Raleway } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 const raleway = Raleway({
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             error:   { iconTheme: { primary: '#d45f5f', secondary: '#242424' } },
           }}
         />
+        <Analytics />
       </body>
     </html>
   )
