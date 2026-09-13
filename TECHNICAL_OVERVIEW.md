@@ -269,12 +269,19 @@ before this pass — these were latent, not regressions introduced here):
   owning listing/profile is next edited. A one-off backfill script (or an
   admin-triggered recompute-all action) would be a reasonable addition if
   the algorithm changes again.
-- **No password reset flow.** There is no "Forgot password?" link, no
-  reset-request page, and no server action for it. `auth/confirm/route.ts`
-  has a half-wired `type=recovery` branch (it calls `verifyOtp` correctly)
-  but redirects to a generic "email confirmed" message either way and
-  there's no "set a new password" page for a recovery link to land on. A
-  real gap for production use, not just a missing UI affordance.
+- ~~No password reset flow~~ — **fixed.** `/auth/forgot-password` (request
+  a link) and `/auth/reset-password` (set a new password) round out the
+  flow. `requestPasswordResetAction` always reports success regardless of
+  whether the email matches an account — the same
+  don't-reveal-account-existence principle `loginAction` already follows
+  for bad credentials. `auth/confirm/route.ts` now branches on
+  `type === 'recovery'`: it hands off to `/auth/reset-password` instead of
+  the generic "email confirmed" message, and a failed/expired recovery
+  token gets its own error page (`?code=invalid_reset_link`) with a
+  "Request New Link" CTA rather than the generic registration/sign-in
+  choice. `/auth/reset-password` itself checks for a live session
+  server-side and shows a "Link expired" card with the same CTA if there
+  isn't one, instead of assuming a valid recovery session exists.
 - **Admin panel is list-only.** Overview/Users/Listings/Audit all read
   real data (no fake/hardcoded rows), but there's no moderation action
   anywhere — no role change, no suspend/remove a listing, no per-user

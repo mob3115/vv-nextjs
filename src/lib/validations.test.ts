@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   registerSchema, loginSchema, ndaSignSchema, swipeSchema, messageSchema, buyerProfileSchema,
   buyerRegisterSchema, sellerRegisterSchema, sellerListingSchema,
+  requestPasswordResetSchema, updatePasswordSchema,
 } from './validations'
 import type { SellerListingInput } from './validations'
 
@@ -47,6 +48,27 @@ describe('loginSchema', () => {
   })
   it('rejects an empty password', () => {
     expect(loginSchema.safeParse({ email: 'a@b.com', password: '' }).success).toBe(false)
+  })
+})
+
+describe('requestPasswordResetSchema', () => {
+  it('accepts a valid email', () => {
+    expect(requestPasswordResetSchema.safeParse({ email: 'a@b.com' }).success).toBe(true)
+  })
+  it('rejects an invalid email', () => {
+    expect(requestPasswordResetSchema.safeParse({ email: 'not-an-email' }).success).toBe(false)
+  })
+})
+
+describe('updatePasswordSchema', () => {
+  it('accepts a strong password', () => {
+    expect(updatePasswordSchema.safeParse({ password: 'Str0ng!Pass' }).success).toBe(true)
+  })
+  it('enforces the same strength rules as registration', () => {
+    expect(updatePasswordSchema.safeParse({ password: 'weak' }).success).toBe(false)
+    expect(updatePasswordSchema.safeParse({ password: 'nouppercase1!' }).success).toBe(false)
+    expect(updatePasswordSchema.safeParse({ password: 'NoNumber!!' }).success).toBe(false)
+    expect(updatePasswordSchema.safeParse({ password: 'NoSpecial1' }).success).toBe(false)
   })
 })
 
