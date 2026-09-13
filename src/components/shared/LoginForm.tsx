@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { loginAction } from '@/lib/actions/auth'
 
@@ -45,7 +46,12 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
       </div>
 
       <div>
-        <label className="form-label" htmlFor="password">Password</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <label className="form-label" htmlFor="password" style={{ marginBottom: 0 }}>Password</label>
+          <Link href="/auth/forgot-password" style={{ fontSize: '0.72rem', color: '#C46A00', textDecoration: 'none' }}>
+            Forgot password?
+          </Link>
+        </div>
         <input
           id="password"
           type="password"
@@ -55,6 +61,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
           onChange={e => setPassword(e.target.value)}
           placeholder="••••••••"
           className="form-input"
+          style={{ marginTop: 6 }}
         />
       </div>
 

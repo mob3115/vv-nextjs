@@ -29,6 +29,16 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+})
+
+// Same strength rule as account creation — a reset shouldn't let someone
+// land on a weaker password than registration would have required.
+export const updatePasswordSchema = z.object({
+  password: accountFields.password,
+})
+
 export const sellerListingSchema = z.object({
   industry: z.string().min(1, 'Industry is required'),
   industryIcon: z.string().min(1),
@@ -112,6 +122,8 @@ export const messageSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>
 export type LoginInput = z.infer<typeof loginSchema>
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>
+export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>
 export type SellerListingInput = z.infer<typeof sellerListingSchema>
 export type BuyerProfileInput = z.infer<typeof buyerProfileSchema>
 export type BuyerRegisterInput = z.infer<typeof buyerRegisterSchema>

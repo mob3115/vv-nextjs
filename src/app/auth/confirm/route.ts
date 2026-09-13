@@ -27,15 +27,23 @@ export async function GET(request: NextRequest) {
     }
   )
 
-  // Path 1: token_hash flow (standard email confirmation)
+  // Path 1: token_hash flow (standard email confirmation, and password reset)
   if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type })
     if (!error) {
+      // A recovery link verifies into a real session — hand off to the
+      // "set a new password" page rather than back to sign-in.
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${origin}/auth/reset-password`)
+      }
       return NextResponse.redirect(
         `${origin}/auth/login?message=Email confirmed! You can now sign in.`
       )
     }
     console.error('verifyOtp error:', error.message)
+    if (type === 'recovery') {
+      return NextResponse.redirect(`${origin}/auth/error?code=invalid_reset_link`)
+    }
   }
 
   // Path 2: PKCE code exchange flow (some Supabase versions send ?code= instead)

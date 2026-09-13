@@ -3,10 +3,16 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { loginSchema, buyerRegisterSchema, sellerRegisterSchema } from '@/lib/validations'
+import {
+  loginSchema, buyerRegisterSchema, sellerRegisterSchema,
+  requestPasswordResetSchema, updatePasswordSchema,
+} from '@/lib/validations'
 import { recomputeScoresForBuyer, recomputeScoresForListing } from './marketplace'
 import { logAuditEvent } from './audit'
-import type { LoginInput, BuyerRegisterInput, SellerRegisterInput } from '@/lib/validations'
+import type {
+  LoginInput, BuyerRegisterInput, SellerRegisterInput,
+  RequestPasswordResetInput, UpdatePasswordInput,
+} from '@/lib/validations'
 
 export type ActionResult = {
   error?: string
@@ -209,6 +215,57 @@ export async function logoutAction(): Promise<void> {
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/auth/login')
+}
+
+// ============================================================
+// PASSWORD RESET — request a link, then set a new password
+//
+// requestPasswordResetAction always reports success, regardless of
+// whether the email actually belongs to an account — the same
+// don't-reveal-account-existence principle loginAction already follows
+// for bad credentials. Supabase emails a recovery link that lands on
+// auth/confirm with type=recovery; that route hands off to
+// /auth/reset-password, where a session already exists (established by
+// verifying the recovery token) for updatePasswordAction to act on.
+// ============================================================
+
+export async function requestPasswordResetAction(input: RequestPasswordResetInput): Promise<ActionResult> {
+  const parsed = requestPasswordResetSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+
+  const supabase = createClient()
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
+  })
+
+  if (error) console.error('requestPasswordResetAction error:', error.message)
+  return { success: true }
+}
+
+export async function updatePasswordAction(input: UpdatePasswordInput): Promise<ActionResult> {
+  const parsed = updatePasswordSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { error: 'Your reset link has expired. Please request a new one.' }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
+  if (error) {
+    console.error('updatePasswordAction error:', error.message)
+    return { error: 'Failed to update password. Please try again.' }
+  }
+
+  await logAuditEvent(supabase, { actorId: user.id, eventType: 'AUTH', action: 'PASSWORD_RESET' })
+
+  await supabase.auth.signOut()
+  return { success: true }
 }
 
 export async function getSessionAction() {

@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/register', '/auth/confirm', '/auth/error']
+const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/register', '/auth/confirm', '/auth/error', '/auth/forgot-password', '/auth/reset-password']
 
 // Role-based route prefixes
 const BUYER_ROUTES = ['/buyer']
