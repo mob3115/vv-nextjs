@@ -194,6 +194,14 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
     return { error: 'Sign in failed. Please try again.' }
   }
 
+  const { data: profile } = await supabase
+    .from('profiles').select('suspended').eq('id', data.user.id).single()
+
+  if (profile?.suspended) {
+    await supabase.auth.signOut()
+    return { error: 'This account has been suspended. Please contact support.' }
+  }
+
   await logAuditEvent(supabase, {
     actorId: data.user.id,
     eventType: 'AUTH',

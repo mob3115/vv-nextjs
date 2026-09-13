@@ -54,9 +54,26 @@ export async function middleware(request: NextRequest) {
   // Fetch user role from profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, suspended')
     .eq('id', user.id)
     .single()
+
+  // Suspension can happen mid-session (loginAction only blocks it at
+  // sign-in time), so it's re-checked on every protected request. The
+  // session is actually torn down here, not just redirected away from —
+  // supabaseResponse already carries the cleared cookies from signOut(),
+  // they just need copying onto the redirect response we return instead.
+  if (profile?.suspended) {
+    await supabase.auth.signOut()
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/error'
+    url.searchParams.set('code', 'suspended')
+    const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirectResponse.cookies.set(name, value, options)
+    })
+    return redirectResponse
+  }
 
   const role = profile?.role ?? 'buyer'
 

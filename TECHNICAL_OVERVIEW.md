@@ -282,13 +282,22 @@ before this pass — these were latent, not regressions introduced here):
   choice. `/auth/reset-password` itself checks for a live session
   server-side and shows a "Link expired" card with the same CTA if there
   isn't one, instead of assuming a valid recovery session exists.
-- **Admin panel is list-only.** Overview/Users/Listings/Audit all read
-  real data (no fake/hardcoded rows), but there's no moderation action
-  anywhere — no role change, no suspend/remove a listing, no per-user
-  detail view. Two now-removed dead buttons (admin Users "View", seller
-  Buyer Interest "Pass") were previously present but non-functional; "Pass"
-  is now wired for real (see §4b's sibling change — it records a `pass`
-  swipe and the Buyer Interest query excludes buyers already passed on,
-  reusing the same exclude-by-swipe pattern `getDiscoverListings` uses),
-  "View" was removed outright since the admin Users table already renders
-  every column on the `profiles` row — there was nothing left to reveal.
+- ~~Admin panel is list-only~~ — **fixed.** Users and Listings now carry
+  real moderation actions (`src/lib/actions/admin.ts`): a role select and
+  a suspend/reinstate toggle per user, and an active/paused/sold status
+  select per listing. Migration 006 adds `profiles.suspended` plus the
+  admin-side RLS policies that were actually missing — "Users can update
+  own profile" and "Sellers can manage own listings" only ever covered
+  self-writes, so an admin acting on someone *else's* row was silently
+  blocked at the DB layer even though the read side already worked. Each
+  action also re-checks `role === 'admin'` itself before writing, so a
+  non-admin request fails with a clear error instead of a silent
+  zero-rows RLS no-op. Suspension is enforced twice: `loginAction` blocks
+  it at sign-in, and middleware re-checks it on every request (a
+  suspended flag set mid-session gets caught on the user's next
+  navigation, not just their next login) — both paths actually call
+  `auth.signOut()` rather than just redirecting away, so the session is
+  torn down, not merely hidden. A full per-user detail/drill-down view
+  wasn't added — the existing Users table already surfaces every
+  `profiles` column, so there wasn't a hidden-information gap to fix,
+  just a missing-actions one.

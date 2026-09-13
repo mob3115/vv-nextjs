@@ -5,6 +5,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   confirmation_failed: 'We could not confirm your email. The link may have expired.',
   invalid_reset_link: 'This password reset link is invalid or has expired. Please request a new one.',
   forbidden: 'You don\'t have permission to access that page.',
+  suspended: 'This account has been suspended. Please contact support if you believe this is a mistake.',
   default: 'Something went wrong. Please try again.',
 }
 
