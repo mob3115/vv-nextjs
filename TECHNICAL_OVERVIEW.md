@@ -215,15 +215,33 @@ test suite, and a full production `npm run build`.
   the shared constants — it intentionally uses seller-facing phrasing
   ("Cash buyer") that differs from the buyer-facing copy, so it isn't a
   true duplicate.
-- **Not attempted: consolidating the swipe/drag-gesture logic** between
-  `SwipeArena.tsx` and `SellerSwipeArena.tsx` (roughly 800 lines of
-  similar pointer/touch handling). This is a real duplication and a good
-  candidate for a shared hook, but I have no browser/touch environment
-  here to verify drag behavior after refactoring it, and a regression in
-  a hand-tuned gesture handler is exactly the kind of bug that's easy to
-  introduce and hard to catch without interactive testing. Recommend
-  doing this as its own change, with manual verification on a real
-  device/browser before merging.
+- **Swipe/drag-gesture consolidation** (`src/hooks/useSwipeDeck.ts`, later
+  pass) — the ~150-180 lines of near-identical touch/mouse drag handling
+  between `SwipeArena.tsx` and `SellerSwipeArena.tsx` are now one shared
+  hook; each component only owns its card JSX and what a swipe *means*
+  (the `recordSwipe` call, toast copy, confetti) via an `onSwipe` callback.
+  Fixed two real bugs found along the way: a fast mouse drag that exited
+  the card's bounding box mid-gesture used to fire `onMouseLeave`, ending
+  the drag prematurely (mouse tracking now happens on `window` once a drag
+  starts, like a native drag implementation); and the exit-animation
+  `setTimeout` had no cleanup, risking a `setState` call after unmount.
+  Also caught **a bug introduced by the refactor itself, not present
+  before it**, and worth recording because it's a real trap: the hook's
+  `commitSwipe` initially depended on the caller-supplied `onSwipe`
+  callback directly. Since that callback is a fresh inline closure on
+  every render of the *caller*, and every drag-visual update triggers a
+  state update (a render), the mouse-handler chain's memoized identity
+  churned on nearly every frame of a drag — which tripped a "remove stale
+  window listeners" cleanup effect and silently detached the mouse
+  handlers seconds into any drag that had already re-rendered once. Fixed
+  by reading `onSwipe` (and the `swiping` guard) through refs instead of
+  closing over them directly, so the handler chain's identity is stable
+  regardless of how often the caller re-renders. This was only caught by
+  actually driving the drag in a browser (Playwright against the dev
+  server, simulating a real fast mouse drag) — `tsc` and the unit suite
+  both stayed green through the whole broken version, which is exactly
+  why this class of change needs interactive verification, not just
+  type-checking.
 
 **Bugs caught by the refactor itself** (fixed, no user-visible change from
 before this pass — these were latent, not regressions introduced here):
@@ -237,8 +255,6 @@ before this pass — these were latent, not regressions introduced here):
 
 ## 8. Known gaps / suggested follow-ups
 
-- **Swipe-gesture hook consolidation** (above) — do it as an isolated,
-  manually-verified change.
 - **No integration/e2e test layer.** The Vitest suite covers pure
   functions only. Server Actions and RLS policies are currently verified
   by manual QA against a real Supabase project. A follow-up worth

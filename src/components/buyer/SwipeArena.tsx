@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { recordSwipe } from '@/lib/actions/marketplace'
 import { ScoreRing } from '@/components/ui/ScoreRing'
 import { Confetti } from '@/components/shared/Confetti'
 import { SWIPE_ICONS, ANON_ICONS, MISC_ICONS, getIndustryIcon } from '@/lib/icons'
+import { useSwipeDeck } from '@/hooks/useSwipeDeck'
 import {
   getDisplayBusiness, getDisplayName, getDisplayLocation,
   getDisplayRevenue, scoreColor
@@ -14,180 +15,27 @@ import {
 import type { SafeListing } from '@/types'
 
 export function SwipeArena({ listings: initialListings }: { listings: SafeListing[] }) {
-  const [queue, setQueue] = useState<SafeListing[]>(initialListings)
-  const [swiping, setSwiping] = useState(false)
-  const [overlayState, setOverlayState] = useState<'like' | 'pass' | null>(null)
-  const [overlayOpacity, setOverlayOpacity] = useState(0)
   const [celebrate, setCelebrate] = useState(0)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const startX = useRef(0)
-  const startY = useRef(0)
-  const curX = useRef(0)
-  const isDragging = useRef(false)
   const router = useRouter()
 
-  const current = queue[0]
-  const next1   = queue[1]
-  const next2   = queue[2]
-
-  // Reset card when queue changes
-  useEffect(() => {
-    const card = cardRef.current
-    if (card) {
-      card.style.transform = ''
-      card.style.opacity = '1'
-      card.style.transition = ''
-    }
-    setOverlayState(null)
-    setOverlayOpacity(0)
-    isDragging.current = false
-  }, [queue])
-
-  const doSwipe = useCallback(async (direction: 'like' | 'pass', listing: SafeListing) => {
-    if (swiping) return
-    setSwiping(true)
-
-    const card = cardRef.current
-    if (card) {
-      card.style.transition = 'transform 0.28s ease, opacity 0.28s ease'
-      card.style.transform = direction === 'like'
-        ? 'translate(140%, -20px) rotate(18deg)'
-        : 'translate(-140%, -20px) rotate(-18deg)'
-      card.style.opacity = '0'
-    }
-
-    // Fire and forget — don't block the UI
-    recordSwipe({ targetListingId: listing.id, direction })
-      .then(result => {
-        if (result.matched) {
-          toast.success('It\'s a match!')
-          setCelebrate(c => c + 1)
-        } else if (direction === 'like') {
-          toast.success('Connection sent — check My Matches!')
-        }
-        router.refresh()
-      })
-      .catch(() => toast.error('Something went wrong'))
-
-    setTimeout(() => {
-      setQueue(q => q.slice(1))
-      setSwiping(false)
-    }, 290)
-  }, [swiping, router])
-
-  // ---- Touch handlers (mobile) ----
-  // We use raw touch events so we can call preventDefault() to stop page scroll
-  useEffect(() => {
-    const card = cardRef.current
-    if (!card || !current) return
-
-    function onTouchStart(e: TouchEvent) {
-      if (swiping) return
-      const t = e.touches[0]
-      startX.current = t.clientX
-      startY.current = t.clientY
-      curX.current = 0
-      isDragging.current = false
-      card.style.transition = 'none'
-    }
-
-    function onTouchMove(e: TouchEvent) {
-      if (swiping) return
-      const t = e.touches[0]
-      const dx = t.clientX - startX.current
-      const dy = t.clientY - startY.current
-
-      // Only lock as a horizontal swipe if movement is more horizontal than vertical
-      if (!isDragging.current) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
-        if (Math.abs(dy) > Math.abs(dx) * 1.2) return // vertical scroll — let browser handle
-        isDragging.current = true
-      }
-
-      // Prevent page scroll while swiping card
-      e.preventDefault()
-      curX.current = dx
-      const rot = dx * 0.07
-      card.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${rot}deg)`
-
-      const progress = Math.min(Math.abs(dx) / 100, 1)
-      if (dx > 10)       { setOverlayState('like'); setOverlayOpacity(progress) }
-      else if (dx < -10) { setOverlayState('pass'); setOverlayOpacity(progress) }
-      else               { setOverlayState(null);   setOverlayOpacity(0) }
-    }
-
-    function onTouchEnd() {
-      if (swiping || !isDragging.current) return
-      const x = curX.current
-
-      if (x > 65) {
-        doSwipe('like', current)
-      } else if (x < -65) {
-        doSwipe('pass', current)
-      } else {
-        card.style.transition = 'transform 0.22s ease'
-        card.style.transform = ''
-        setOverlayState(null)
-        setOverlayOpacity(0)
-      }
-      isDragging.current = false
-      curX.current = 0
-    }
-
-    card.addEventListener('touchstart', onTouchStart, { passive: true })
-    card.addEventListener('touchmove',  onTouchMove,  { passive: false }) // passive:false to allow preventDefault
-    card.addEventListener('touchend',   onTouchEnd,   { passive: true })
-
-    return () => {
-      card.removeEventListener('touchstart', onTouchStart)
-      card.removeEventListener('touchmove',  onTouchMove)
-      card.removeEventListener('touchend',   onTouchEnd)
-    }
-  }, [current, swiping, doSwipe])
-
-  // ---- Mouse handlers (desktop) ----
-  function onMouseDown(e: React.MouseEvent) {
-    if (swiping) return
-    startX.current = e.clientX
-    startY.current = e.clientY
-    curX.current = 0
-    isDragging.current = true
-    if (cardRef.current) cardRef.current.style.transition = 'none'
-  }
-
-  function onMouseMove(e: React.MouseEvent) {
-    if (!isDragging.current || swiping) return
-    const dx = e.clientX - startX.current
-    const dy = e.clientY - startY.current
-    curX.current = dx
-    if (cardRef.current) {
-      cardRef.current.style.transform = `translate(${dx}px, ${dy * 0.35}px) rotate(${dx * 0.07}deg)`
-    }
-    const progress = Math.min(Math.abs(dx) / 100, 1)
-    if (dx > 10)       { setOverlayState('like'); setOverlayOpacity(progress) }
-    else if (dx < -10) { setOverlayState('pass'); setOverlayOpacity(progress) }
-    else               { setOverlayState(null);   setOverlayOpacity(0) }
-  }
-
-  function onMouseUp() {
-    if (!isDragging.current || !current) return
-    isDragging.current = false
-    const x = curX.current
-
-    if (x > 65) {
-      doSwipe('like', current)
-    } else if (x < -65) {
-      doSwipe('pass', current)
-    } else {
-      if (cardRef.current) {
-        cardRef.current.style.transition = 'transform 0.22s ease'
-        cardRef.current.style.transform = ''
-      }
-      setOverlayState(null)
-      setOverlayOpacity(0)
-    }
-    curX.current = 0
-  }
+  const { current, next1, next2, swiping, overlay, cardRef, swipe, cardHandlers } = useSwipeDeck<SafeListing>({
+    items: initialListings,
+    onSwipe: (direction, listing) => {
+      const swipeDirection = direction === 'right' ? 'like' : 'pass'
+      // Fire and forget — don't block the UI
+      recordSwipe({ targetListingId: listing.id, direction: swipeDirection })
+        .then(result => {
+          if (result.matched) {
+            toast.success('It\'s a match!')
+            setCelebrate(c => c + 1)
+          } else if (swipeDirection === 'like') {
+            toast.success('Connection sent — check My Matches!')
+          }
+          router.refresh()
+        })
+        .catch(() => toast.error('Something went wrong'))
+    },
+  })
 
   // ---- Empty queue ----
   if (!current) {
@@ -246,10 +94,7 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
               ref={cardRef}
               className="swipe-card top"
               style={{ cursor: swiping ? 'default' : 'grab', userSelect: 'none', touchAction: 'none' }}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={onMouseUp}
-              onMouseLeave={onMouseUp}
+              onMouseDown={cardHandlers.onMouseDown}
             >
               <div style={{ height: 5, background: 'linear-gradient(90deg,#A05500,#C46A00)' }} />
 
@@ -313,18 +158,18 @@ export function SwipeArena({ listings: initialListings }: { listings: SafeListin
               )}
 
               {/* Overlays */}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(76,175,125,0.22)', color: '#4caf7d', opacity: overlayState === 'like' ? overlayOpacity : 0, transition: 'opacity 0.08s' }}>CONNECT</div>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(212,95,95,0.18)', color: '#d45f5f', opacity: overlayState === 'pass' ? overlayOpacity : 0, transition: 'opacity 0.08s' }}>PASS</div>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(76,175,125,0.22)', color: '#4caf7d', opacity: overlay?.direction === 'right' ? overlay.opacity : 0, transition: 'opacity 0.08s' }}>CONNECT</div>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Bebas Neue, sans-serif', fontSize: '2.8rem', letterSpacing: '0.1em', borderRadius: 20, pointerEvents: 'none', background: 'rgba(212,95,95,0.18)', color: '#d45f5f', opacity: overlay?.direction === 'left' ? overlay.opacity : 0, transition: 'opacity 0.08s' }}>PASS</div>
             </div>
           </div>
 
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <button onClick={() => !swiping && doSwipe('pass', current)} disabled={swiping} aria-label="Pass"
+            <button onClick={() => !swiping && swipe('left', current)} disabled={swiping} aria-label="Pass"
               style={{ width: 54, height: 54, borderRadius: '50%', background: '#242424', border: '2px solid rgba(212,95,95,0.35)', color: '#d45f5f', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
               <SWIPE_ICONS.pass size={22} strokeWidth={2} />
             </button>
-            <button onClick={() => !swiping && doSwipe('like', current)} disabled={swiping} aria-label="Connect"
+            <button onClick={() => !swiping && swipe('right', current)} disabled={swiping} aria-label="Connect"
               style={{ width: 66, height: 66, borderRadius: '50%', background: '#A05500', border: 'none', color: '#fff', cursor: swiping ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(160,85,0,0.4)', opacity: swiping ? 0.5 : 1 }}>
               <SWIPE_ICONS.like size={26} strokeWidth={2} fill="currentColor" />
             </button>
