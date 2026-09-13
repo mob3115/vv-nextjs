@@ -38,17 +38,10 @@ export default function LoginPage({
               </p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who shares my values." cite="Seller — Manufacturing, 28 years" />
-              <BrandQuote text="I've spent my whole career building purpose driven organizations, I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
+              <BrandQuote text="My dream is to transition my business to someone who shares my vision, will steward my customers, and honor the reputation we've built." cite="Seller — Manufacturing, 28 years" />
+              <BrandQuote text="I've always wanted to run my own business, but rather than start from scratch, I want to carry forward the legacy of a great family-owned company and help build its next chapter." cite="Buyer — Workforce Development" />
             </div>
-            <div style={{ display: 'flex', gap: 28 }}>
-              {[['847','Listings'],['312','Matches'],['94%','NDA Rate']].map(([val, lbl]) => (
-                <div key={lbl}>
-                  <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '2rem', color: '#fff', lineHeight: 1 }}>{val}</div>
-                  <div style={{ fontSize: '0.68rem', color: '#929292', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 2 }}>{lbl}</div>
-                </div>
-              ))}
-            </div>
+            <ProcessSteps />
           </div>
 
           {/* Right auth panel */}
@@ -105,19 +98,16 @@ export default function LoginPage({
         {/* Mobile-only brand content — scrollable below the card */}
         <div className="auth-mobile-brand" style={{ marginTop: 32, padding: '0 4px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-            <BrandQuote text="I'm not selling to the highest bidder. I'm finding someone who shares my values." cite="Seller — Manufacturing, 28 years" />
-            <BrandQuote text="I've spent my whole career building purpose driven organizations, I want to run a business that does the same thing." cite="Buyer — Workforce Development" />
+            <BrandQuote text="My dream is to transition my business to someone who shares my vision, will steward my customers, and honor the reputation we've built." cite="Seller — Manufacturing, 28 years" />
+            <BrandQuote text="I've always wanted to run my own business, but rather than start from scratch, I want to carry forward the legacy of a great family-owned company and help build its next chapter." cite="Buyer — Workforce Development" />
           </div>
-          <div style={{ display: 'flex', gap: 28, justifyContent: 'center' }}>
-            {[['847','Listings'],['312','Matches'],['94%','NDA Rate']].map(([val, lbl]) => (
-              <div key={lbl} style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: '1.8rem', color: '#fff', lineHeight: 1 }}>{val}</div>
-                <div style={{ fontSize: '0.65rem', color: '#929292', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 2 }}>{lbl}</div>
-              </div>
-            ))}
-          </div>
+          <ProcessSteps center />
         </div>
       </div>
+
+      <p style={{ maxWidth: 520, margin: '28px auto 0', textAlign: 'center', fontSize: '0.72rem', color: '#5a5a5a', fontStyle: 'italic', lineHeight: 1.6, padding: '0 16px' }}>
+        We&rsquo;re the V + V Business Marketplace because we believe all it takes to carry a great privately held business into its next generation is shared vision and values &mdash; and a lot of hard work.
+      </p>
 
       {/* Responsive CSS */}
       <style>{`
@@ -142,6 +132,28 @@ function BrandQuote({ text, cite }: { text: string; cite: string }) {
       <p style={{ fontSize: '0.84rem', color: '#D9D9D9', fontStyle: 'italic', lineHeight: 1.6, marginBottom: 5 }}>&ldquo;{text}&rdquo;</p>
       <cite style={{ fontSize: '0.68rem', color: '#C46A00', textTransform: 'uppercase', letterSpacing: '0.12em', fontStyle: 'normal' }}>{cite}</cite>
     </blockquote>
+  )
+}
+
+const STEPS = ['Create a Profile', 'Match with Like-Minded Leaders', 'Conduct Business — on Shared Values']
+
+function ProcessSteps({ center = false }: { center?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: center ? 'center' : 'stretch' }}>
+      {STEPS.map((step, i) => (
+        <div key={step} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+            border: '1px solid #C46A00', color: '#C46A00',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Bebas Neue, sans-serif', fontSize: '0.95rem',
+          }}>
+            {i + 1}
+          </div>
+          <span style={{ fontSize: '0.82rem', color: '#D9D9D9', fontWeight: 600 }}>{step}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
