@@ -4,12 +4,12 @@
 // for a callable action.
 //
 // Event types match what src/app/admin/audit/page.tsx already renders
-// distinct colors for: AUTH, NDA, VAULT, MATCH (ADMIN/SYSTEM/RATE_LIMIT are
+// distinct colors for: AUTH, NDA, VAULT, MATCH, ADMIN (SYSTEM/RATE_LIMIT are
 // reserved for future use — nothing currently emits them).
 
 import type { createClient } from '@/lib/supabase/server'
 
-export type AuditEventType = 'AUTH' | 'NDA' | 'VAULT' | 'MATCH'
+export type AuditEventType = 'AUTH' | 'NDA' | 'VAULT' | 'MATCH' | 'ADMIN'
 
 interface AuditEvent {
   actorId: string | null

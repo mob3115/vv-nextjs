@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { ADMIN_NAV } from '@/lib/nav'
+import { ListingStatusActions } from '@/components/admin/ListingStatusActions'
 
 export const metadata: Metadata = { title: 'Listings' }
 
@@ -33,7 +34,7 @@ export default async function AdminListingsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
             <thead>
               <tr>
-                {['Business', 'Seller', 'Industry', 'Ask Price', 'Status', 'Anonymity'].map(h => (
+                {['Business', 'Seller', 'Industry', 'Ask Price', 'Status', 'Anonymity', 'Actions'].map(h => (
                   <th key={h} style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', padding: '10px 14px', textAlign: 'left', borderBottom: '1px solid #2e2e2e', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -50,6 +51,9 @@ export default async function AdminListingsPage() {
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <span className={`anon-${l.anonymity_level}`}>L{l.anonymity_level}</span>
+                  </td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <ListingStatusActions listingId={l.id} status={l.status} />
                   </td>
                 </tr>
               ))}

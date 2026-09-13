@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserAndProfile } from '@/lib/page-auth'
 import { AppShell } from '@/components/shared/AppShell'
 import { ADMIN_NAV } from '@/lib/nav'
+import { UserRowActions } from '@/components/admin/UserRowActions'
 
 export const metadata: Metadata = { title: 'User Management' }
 
@@ -34,7 +35,7 @@ export default async function AdminUsersPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Role', 'Joined'].map(h => (
+                {['Name', 'Email', 'Role', 'Status', 'Joined', 'Actions'].map(h => (
                   <th key={h} style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', padding: '10px 14px', textAlign: 'left', borderBottom: '1px solid #2e2e2e', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -47,8 +48,21 @@ export default async function AdminUsersPage() {
                   <td style={{ padding: '12px 14px' }}>
                     <span className="badge-grey">{u.role}</span>
                   </td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <span className={u.suspended ? 'badge-danger' : 'badge-green'}>
+                      {u.suspended ? 'suspended' : 'active'}
+                    </span>
+                  </td>
                   <td style={{ padding: '12px 14px', color: '#929292', whiteSpace: 'nowrap' }}>
                     {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <UserRowActions
+                      userId={u.id}
+                      role={u.role}
+                      suspended={u.suspended}
+                      isSelf={u.id === profile.id}
+                    />
                   </td>
                 </tr>
               ))}
