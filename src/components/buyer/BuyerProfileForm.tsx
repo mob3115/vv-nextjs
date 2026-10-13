@@ -158,7 +158,7 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', marginBottom: 14 }}>Acquisition Criteria</div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {fieldLabel('Minimum Budget *')}
             {textInput(priceMin, setPriceMin, 'e.g. 500000')}
@@ -172,7 +172,7 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {fieldLabel('Location Preference *')}
             <select

@@ -10,6 +10,13 @@ import type { SellerListingInput } from '@/lib/validations'
 
 interface ListingFormProps {
   existing?: any  // existing listing data for edit mode
+  // The account name collected one step earlier in the registration wizard
+  // (RegisterForm). When present, this form is being embedded mid-signup —
+  // the owner name fields are derived from it instead of asked again, since
+  // the person just typed their name on the previous screen. Absent when
+  // editing an existing listing from the seller dashboard, where these
+  // fields show their own independently-editable saved values instead.
+  fullName?: string
   // When provided, the final submit hands the validated payload to this
   // callback instead of calling createSellerListing()/updateSellerListing()
   // + redirecting itself — used to embed this form inside the registration
@@ -22,7 +29,7 @@ interface ListingFormProps {
 
 type Step = 1 | 2 | 3 | 4
 
-export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProps) {
+export function ListingForm({ existing, fullName, onSubmit, submitLabel }: ListingFormProps) {
   const isEdit = !!existing
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -31,8 +38,8 @@ export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProp
   // Form state — pre-filled if editing
   const [industry, setIndustry]           = useState(existing?.industry ?? '')
   const [businessName, setBusinessName]   = useState(existing?.business_name ?? '')
-  const [ownerFullName, setOwnerFullName] = useState(existing?.owner_full_name ?? '')
-  const [ownerFirstName, setOwnerFirstName] = useState(existing?.owner_first_name ?? '')
+  const [ownerFullName, setOwnerFullName] = useState(existing?.owner_full_name ?? fullName ?? '')
+  const [ownerFirstName, setOwnerFirstName] = useState(existing?.owner_first_name ?? (fullName ? fullName.trim().split(/\s+/)[0] : ''))
   const [tagline, setTagline]             = useState(existing?.tagline ?? '')
   const [yearsOp, setYearsOp]             = useState(existing?.years_operating?.toString() ?? '')
   const [employees, setEmployees]         = useState(existing?.employees_range ?? '')
@@ -245,29 +252,44 @@ export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProp
           <Err field="industry" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {label('Business Name (private) *')}
             {input(businessName, setBusinessName, 'e.g. Ironwood Fabrication Co.')}
             <Err field="businessName" />
           </div>
-          <div>
-            {label('Your Full Name (private) *')}
-            {input(ownerFullName, setOwnerFullName, 'Legal name')}
-          </div>
+          {/* Owner name is collected once, on the account step, when this
+              form is embedded in registration (fullName is passed) — asking
+              again here would just repeat the same question. Editing an
+              existing listing from the dashboard (no fullName prop) still
+              shows it, independently editable from the account name. */}
+          {fullName ? (
+            <div>
+              {label('Years Operating *')}
+              {input(yearsOp, setYearsOp, 'e.g. 12', 'number')}
+              <Err field="yearsOp" />
+            </div>
+          ) : (
+            <div>
+              {label('Your Full Name (private) *')}
+              {input(ownerFullName, setOwnerFullName, 'Legal name')}
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div>
-            {label('First Name (shown at Level 2)')}
-            {input(ownerFirstName, setOwnerFirstName, 'First name only')}
+        {!fullName && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              {label('First Name (shown at Level 2)')}
+              {input(ownerFirstName, setOwnerFirstName, 'First name only')}
+            </div>
+            <div>
+              {label('Years Operating *')}
+              {input(yearsOp, setYearsOp, 'e.g. 12', 'number')}
+              <Err field="yearsOp" />
+            </div>
           </div>
-          <div>
-            {label('Years Operating *')}
-            {input(yearsOp, setYearsOp, 'e.g. 12', 'number')}
-            <Err field="yearsOp" />
-          </div>
-        </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           {label('One-Line Tagline *')}
@@ -276,7 +298,7 @@ export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProp
           <Err field="tagline" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {label('Employee Range *')}
             <select
@@ -338,7 +360,7 @@ export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProp
           🔒 Exact revenue and asking price are encrypted and never shown until a buyer signs your NDA.
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {label('Exact Asking Price (post-NDA) *')}
             {input(askingPriceExact, setAskingPriceExact, 'e.g. $2,800,000')}
@@ -351,7 +373,7 @@ export function ListingForm({ existing, onSubmit, submitLabel }: ListingFormProp
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             {label('Annual Revenue (exact, post-NDA) *')}
             {input(revenueExact, setRevenueExact, 'e.g. $4,200,000')}

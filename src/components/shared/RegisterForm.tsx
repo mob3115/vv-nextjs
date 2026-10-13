@@ -215,7 +215,12 @@ export function RegisterForm() {
   // ---- Step 2: Full profile (buyer/dual) or full listing (seller) ----
   if (step === 2) return (
     <div>
-      <StepBar />
+      {/* ListingForm has its own (more granular) 4-step progress bar for
+          Business/Financials/Values/Privacy — stacking this coarser one on
+          top of it just doubles up on progress indicators. Only shown here
+          for buyer/dual, where BuyerProfileForm is a single screen with no
+          stepper of its own. */}
+      {role !== 'seller' && <StepBar />}
       <button
         type="button"
         onClick={() => {
@@ -232,7 +237,7 @@ export function RegisterForm() {
         ← Back to account details
       </button>
       {role === 'seller' ? (
-        <ListingForm onSubmit={handleListingSubmit} submitLabel="List My Business →" />
+        <ListingForm fullName={fullName} onSubmit={handleListingSubmit} submitLabel="List My Business →" />
       ) : (
         <BuyerProfileForm
           fullName={fullName}
