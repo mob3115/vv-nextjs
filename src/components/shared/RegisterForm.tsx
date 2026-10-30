@@ -97,26 +97,35 @@ export function RegisterForm() {
   // by one to map step 1/2/3 onto bar positions 0/1/2.
   const barStep = step - 1
 
-  // Step bar
+  // Step bar — a 3-column grid (both STEPS arrays always have exactly 3
+  // entries) so each circle sits dead-center in its column, rather than the
+  // old flex layout where the middle circle rode on the left edge of its
+  // (much wider) flex-1 box instead of the box's center. The connector line
+  // is drawn separately, absolutely positioned between the first and last
+  // circles' centers (inset = half a column's width = 100/6%), with an
+  // orange overlay on top sized to the current progress fraction.
+  const stepCount = stepLabels.length
+  const stepInset = 100 / (2 * stepCount)
+  const stepProgress = stepCount > 1 ? Math.min(Math.max(barStep, 0), stepCount - 1) / (stepCount - 1) : 0
   const StepBar = () => (
-    <div className="flex items-center gap-0 mb-8">
+    <div className="relative grid grid-cols-3 mb-8">
+      <div className="absolute h-0.5 bg-grey-border" style={{ top: 13, left: `${stepInset}%`, right: `${stepInset}%` }} />
+      <div
+        className="absolute h-0.5 bg-orange transition-all"
+        style={{ top: 13, left: `${stepInset}%`, width: `${(100 - 2 * stepInset) * stepProgress}%` }}
+      />
       {stepLabels.map((label, i) => (
-        <div key={i} className="flex items-center flex-1 last:flex-none">
-          <div className="flex flex-col items-center">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all ${
-              i < barStep ? 'bg-orange text-white' :
-              i === barStep ? 'border-2 border-orange text-orange bg-black-card' :
-              'bg-black-hover border border-grey-border text-grey-mid'
-            }`}>
-              {i < barStep ? '✓' : i + 1}
-            </div>
-            <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block ${i === barStep ? 'text-white' : 'text-grey-mid'}`}>
-              {label}
-            </span>
+        <div key={i} className="relative z-10 flex flex-col items-center">
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            i < barStep ? 'bg-orange text-white' :
+            i === barStep ? 'border-2 border-orange text-orange bg-black-card' :
+            'bg-black-hover border border-grey-border text-grey-mid'
+          }`}>
+            {i < barStep ? '✓' : i + 1}
           </div>
-          {i < stepLabels.length - 1 && (
-            <div className={`flex-1 h-0.5 mx-1 ${i < barStep ? 'bg-orange' : 'bg-grey-border'}`} />
-          )}
+          <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block text-center px-1 ${i === barStep ? 'text-white' : 'text-grey-mid'}`}>
+            {label}
+          </span>
         </div>
       ))}
     </div>
