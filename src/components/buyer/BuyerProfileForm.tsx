@@ -272,7 +272,7 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel, mo
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         {fieldLabel(`Core Values * — ${values.length}/5 selected`)}
         {values.length > 0 && (
-          <button type="button" onClick={() => setValuesMethod('quiz')} className="btn-ghost btn-sm" style={{ fontFamily: 'inherit', cursor: 'pointer' }}>
+          <button type="button" onClick={() => setValuesMethod('quiz')} className="btn-ghost btn-sm">
             Retake the Values Quiz
           </button>
         )}

@@ -28,13 +28,24 @@
   .form-hint { font-size: 0.73rem; color: #6a6a6a; margin-top: 4px; }
   .form-error { font-size: 0.73rem; color: #d45f5f; margin-top: 4px; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 20px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; white-space: nowrap; font-family: inherit; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* .btn-primary/.btn-ghost/.btn-danger each carry the full button shape
+     (padding, radius, type, spacing) rather than relying on a separate base
+     .btn class — every call site in the app reaches for exactly one of these
+     three, never .btn itself, so folding the shared shape in here is what
+     actually keeps every button on the site consistent. */
+  .btn, .btn-primary, .btn-ghost, .btn-danger {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 10px 20px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: none; transition: all 0.2s; white-space: nowrap;
+    font-family: inherit; text-decoration: none;
+  }
+  .btn:disabled, .btn-primary:disabled, .btn-ghost:disabled, .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-primary { background: #A05500; color: #fff; }
   .btn-primary:hover:not(:disabled) { background: #C46A00; transform: translateY(-1px); }
   .btn-ghost { background: transparent; color: #D9D9D9; border: 1px solid #2e2e2e; }
-  .btn-ghost:hover { background: #2e2e2e; color: #fff; }
+  .btn-ghost:hover:not(:disabled) { background: #2e2e2e; color: #fff; }
   .btn-danger { background: #d45f5f; color: #fff; }
+  .btn-danger:hover:not(:disabled) { background: #c24848; }
   .btn-lg { padding: 14px 28px; font-size: 0.95rem; border-radius: 12px; }
   .btn-sm { padding: 6px 14px; font-size: 0.78rem; }
   .btn-block { width: 100%; }

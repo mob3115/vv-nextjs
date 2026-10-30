@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { Search, Store, ArrowLeftRight, type LucideIcon } from 'lucide-react'
 import { registerBuyerAction, registerSellerAction } from '@/lib/actions/auth'
 import { BuyerProfileForm } from '@/components/buyer/BuyerProfileForm'
 import { ListingForm } from '@/components/seller/ListingForm'
@@ -128,10 +129,10 @@ export function RegisterForm() {
       <p className="text-sm text-grey-dark mb-6">You can update your role anytime after registration.</p>
       <div className="grid grid-cols-3 gap-3 mb-6">
         {([
-          ['buyer',  '🔍', 'Buyer',  'Find businesses to acquire'],
-          ['seller', '🏢', 'Seller', 'List your business for sale'],
-          ['dual',   '⇄',  'Both',   'Buyer and seller access'],
-        ] as [Role, string, string, string][]).map(([r, icon, roleLabel, desc]) => (
+          ['buyer',  Search,         'Buyer',  'Find businesses to acquire'],
+          ['seller', Store,          'Seller', 'List your business for sale'],
+          ['dual',   ArrowLeftRight, 'Both',   'Buyer and seller access'],
+        ] as [Role, LucideIcon, string, string][]).map(([r, Icon, roleLabel, desc]) => (
           <button
             key={r}
             type="button"
@@ -142,7 +143,7 @@ export function RegisterForm() {
                 : 'border-grey-border bg-black-deep text-grey-dark hover:border-orange hover:text-white'
             }`}
           >
-            <span className="block text-2xl mb-2">{icon}</span>
+            <Icon size={26} strokeWidth={1.75} className="mx-auto mb-2" aria-hidden />
             <span className="block text-sm font-semibold">{roleLabel}</span>
             <span className="block text-xs mt-1 opacity-70">{desc}</span>
           </button>

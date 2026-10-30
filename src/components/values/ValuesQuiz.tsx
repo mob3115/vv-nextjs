@@ -99,7 +99,10 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
     onConfirm(top5, draft)
   }
 
-  const btnBase: React.CSSProperties = { fontFamily: 'inherit', cursor: 'pointer', borderRadius: 8 }
+  // Only the custom answer/swap tiles below need their own inline shape —
+  // the real buttons (.btn-primary / .btn-ghost) already carry padding,
+  // radius, and font from globals.css, so they don't spread this.
+  const tileStyle: React.CSSProperties = { fontFamily: 'inherit', cursor: 'pointer', borderRadius: 6 }
 
   if (screen === 'intro') {
     return (
@@ -107,8 +110,8 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: 6 }}>{intro.title}</h3>
         <p style={{ fontSize: '0.86rem', color: '#929292', lineHeight: 1.6, marginBottom: 20 }}>{intro.lede}</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => setScreen('question')} className="btn-primary" style={btnBase}>Start the quiz →</button>
-          <button type="button" onClick={onCancel} className="btn-ghost" style={btnBase}>← Back</button>
+          <button type="button" onClick={() => setScreen('question')} className="btn-primary">Start the quiz →</button>
+          <button type="button" onClick={onCancel} className="btn-ghost">← Back</button>
         </div>
         <p style={{ fontSize: '0.72rem', color: '#6a6a6a', marginTop: 16 }}>About 6 minutes. There are no right answers — every option is something a thoughtful owner might choose.</p>
       </div>
@@ -127,7 +130,7 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
           type="button"
           onClick={() => choose(o.value)}
           style={{
-            ...btnBase,
+            ...tileStyle,
             display: 'flex', gap: 12, alignItems: 'center', width: '100%', textAlign: 'left',
             padding: '12px 14px', fontSize: '0.88rem', lineHeight: 1.4,
             border: `1px solid ${on ? '#A05500' : '#2e2e2e'}`,
@@ -171,8 +174,8 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
         <div style={{ display: 'grid', gap: 8 }}>{opts}</div>
         <p style={{ fontSize: '0.72rem', color: '#929292', minHeight: 18, marginTop: 10 }}>{status}</p>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
-          <button type="button" onClick={back} className="btn-ghost" style={btnBase}>← Back</button>
-          <button type="button" onClick={next} disabled={!complete} className="btn-primary" style={btnBase}>
+          <button type="button" onClick={back} className="btn-ghost">← Back</button>
+          <button type="button" onClick={next} disabled={!complete} className="btn-primary">
             {i === questions.length - 1 ? 'See my values →' : 'Next →'}
           </button>
         </div>
@@ -203,7 +206,6 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
                     type="button"
                     onClick={() => setSwapSlot(swapSlot === k ? null : k)}
                     className="btn-ghost btn-sm"
-                    style={btnBase}
                   >
                     {swapSlot === k ? 'Cancel' : 'Swap'}
                   </button>
@@ -222,7 +224,7 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
                         key={r.value}
                         type="button"
                         onClick={() => swapIn(r.value)}
-                        style={{ ...btnBase, display: 'flex', justifyContent: 'space-between', padding: '8px 12px', fontSize: '0.82rem', border: '1px solid #2e2e2e', background: '#141414', color: '#D9D9D9' }}
+                        style={{ ...tileStyle, display: 'flex', justifyContent: 'space-between', padding: '8px 12px', fontSize: '0.82rem', border: '1px solid #2e2e2e', background: '#141414', color: '#D9D9D9' }}
                       >
                         <span>{r.value}</span>
                         <span style={{ color: '#6a6a6a' }}>{r.maxScore ? Math.round((r.score / r.maxScore) * 100) : 0}%</span>
@@ -236,9 +238,9 @@ export function ValuesQuiz({ audience, onConfirm, onCancel }: ValuesQuizProps) {
         })}
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-        <button type="button" onClick={confirm} className="btn-primary" style={btnBase}>Confirm my values →</button>
-        <button type="button" onClick={() => { setScreen('question'); setI(0); setAnswers({}); setTop5(null) }} className="btn-ghost" style={btnBase}>Retake quiz</button>
-        <button type="button" onClick={onCancel} className="btn-ghost" style={btnBase}>Cancel</button>
+        <button type="button" onClick={confirm} className="btn-primary">Confirm my values →</button>
+        <button type="button" onClick={() => { setScreen('question'); setI(0); setAnswers({}); setTop5(null) }} className="btn-ghost">Retake quiz</button>
+        <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
       </div>
       <details>
         <summary style={{ cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: '#929292' }}>See all {CORE_VALUES.length} values ranked</summary>
