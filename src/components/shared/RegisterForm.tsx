@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { Search, Store, ArrowLeftRight, type LucideIcon } from 'lucide-react'
 import { registerBuyerAction, registerSellerAction } from '@/lib/actions/auth'
 import { BuyerProfileForm } from '@/components/buyer/BuyerProfileForm'
 import { ListingForm } from '@/components/seller/ListingForm'
@@ -16,8 +17,13 @@ type Role = 'buyer' | 'seller' | 'dual'
 // afterward: BuyerProfileForm / ListingForm are embedded directly (in
 // "collect" mode — see their onSubmit prop) and their payload is submitted
 // together with account creation via registerBuyerAction/registerSellerAction.
-const BUYER_STEPS = ['Your Role', 'Account', 'Your Profile', 'Done']
-const SELLER_STEPS = ['Your Role', 'Account', 'List Your Business', 'Done']
+//
+// The Role screen (internal step 0) is a quick, unlabeled intro rather than
+// a numbered step — it's a single click, not a form to fill in. The numbered
+// bar only covers the substantive part of the flow: Account, then Your
+// Profile/Your Business, then Done, so "step 1 of 3" means something.
+const BUYER_STEPS = ['Account', 'Your Profile', 'Done']
+const SELLER_STEPS = ['Account', 'List Your Business', 'Done']
 
 export function RegisterForm() {
   const [step, setStep] = useState(0)
@@ -86,44 +92,56 @@ export function RegisterForm() {
   }
 
   const stepLabels = role === 'seller' ? SELLER_STEPS : BUYER_STEPS
+  // Internal `step` values are 0 (role, unlabeled) / 1 / 2 / 3 — the bar
+  // itself only shows 3 dots (Account / Profile-or-Listing / Done), so shift
+  // by one to map step 1/2/3 onto bar positions 0/1/2.
+  const barStep = step - 1
 
-  // Step bar
+  // Step bar — a 3-column grid (both STEPS arrays always have exactly 3
+  // entries) so each circle sits dead-center in its column, rather than the
+  // old flex layout where the middle circle rode on the left edge of its
+  // (much wider) flex-1 box instead of the box's center. The connector line
+  // is drawn separately, absolutely positioned between the first and last
+  // circles' centers (inset = half a column's width = 100/6%), with an
+  // orange overlay on top sized to the current progress fraction.
+  const stepCount = stepLabels.length
+  const stepInset = 100 / (2 * stepCount)
+  const stepProgress = stepCount > 1 ? Math.min(Math.max(barStep, 0), stepCount - 1) / (stepCount - 1) : 0
   const StepBar = () => (
-    <div className="flex items-center gap-0 mb-8">
+    <div className="relative grid grid-cols-3 mb-8">
+      <div className="absolute h-0.5 bg-grey-border" style={{ top: 13, left: `${stepInset}%`, right: `${stepInset}%` }} />
+      <div
+        className="absolute h-0.5 bg-orange transition-all"
+        style={{ top: 13, left: `${stepInset}%`, width: `${(100 - 2 * stepInset) * stepProgress}%` }}
+      />
       {stepLabels.map((label, i) => (
-        <div key={i} className="flex items-center flex-1 last:flex-none">
-          <div className="flex flex-col items-center">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all ${
-              i < step ? 'bg-orange text-white' :
-              i === step ? 'border-2 border-orange text-orange bg-black-card' :
-              'bg-black-hover border border-grey-border text-grey-mid'
-            }`}>
-              {i < step ? '✓' : i + 1}
-            </div>
-            <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block ${i === step ? 'text-white' : 'text-grey-mid'}`}>
-              {label}
-            </span>
+        <div key={i} className="relative z-10 flex flex-col items-center">
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            i < barStep ? 'bg-orange text-white' :
+            i === barStep ? 'border-2 border-orange text-orange bg-black-card' :
+            'bg-black-hover border border-grey-border text-grey-mid'
+          }`}>
+            {i < barStep ? '✓' : i + 1}
           </div>
-          {i < stepLabels.length - 1 && (
-            <div className={`flex-1 h-0.5 mx-1 ${i < step ? 'bg-orange' : 'bg-grey-border'}`} />
-          )}
+          <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block text-center px-1 ${i === barStep ? 'text-white' : 'text-grey-mid'}`}>
+            {label}
+          </span>
         </div>
       ))}
     </div>
   )
 
-  // ---- Step 0: Role ----
+  // ---- Step 0: Role (quick intro, not a numbered step) ----
   if (step === 0) return (
     <div>
-      <StepBar />
       <h2 className="text-xl font-bold text-white mb-1.5">How are you joining V+V?</h2>
       <p className="text-sm text-grey-dark mb-6">You can update your role anytime after registration.</p>
       <div className="grid grid-cols-3 gap-3 mb-6">
         {([
-          ['buyer',  '🔍', 'Buyer',  'Find businesses to acquire'],
-          ['seller', '🏢', 'Seller', 'List your business for sale'],
-          ['dual',   '⇄',  'Both',   'Buyer and seller access'],
-        ] as [Role, string, string, string][]).map(([r, icon, roleLabel, desc]) => (
+          ['buyer',  Search,         'Buyer',  'Find businesses to acquire'],
+          ['seller', Store,          'Seller', 'List your business for sale'],
+          ['dual',   ArrowLeftRight, 'Both',   'Buyer and seller access'],
+        ] as [Role, LucideIcon, string, string][]).map(([r, Icon, roleLabel, desc]) => (
           <button
             key={r}
             type="button"
@@ -134,7 +152,7 @@ export function RegisterForm() {
                 : 'border-grey-border bg-black-deep text-grey-dark hover:border-orange hover:text-white'
             }`}
           >
-            <span className="block text-2xl mb-2">{icon}</span>
+            <Icon size={26} strokeWidth={1.75} className="mx-auto mb-2" aria-hidden />
             <span className="block text-sm font-semibold">{roleLabel}</span>
             <span className="block text-xs mt-1 opacity-70">{desc}</span>
           </button>

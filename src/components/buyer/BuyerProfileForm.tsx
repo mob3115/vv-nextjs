@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { upsertBuyerProfile } from '@/lib/actions/marketplace'
 import { INDUSTRIES, FUNDING_SOURCES as FUNDING_OPTIONS, CORE_VALUES as ALL_VALUES, BUYER_LOCATION_PREFERENCES } from '@/lib/constants'
+import { AccordionCard } from '@/components/shared/AccordionCard'
+import { ValuesMethodChooser } from '@/components/values/ValuesMethodChooser'
+import { ValuesQuiz } from '@/components/values/ValuesQuiz'
 import type { BuyerProfileInput } from '@/lib/validations'
 
 interface BuyerProfileFormProps {
@@ -17,9 +20,18 @@ interface BuyerProfileFormProps {
   // (see RegisterForm) rather than through its own authenticated session.
   onSubmit?: (payload: BuyerProfileInput) => void | Promise<void>
   submitLabel?: string
+  // 'wizard' (default): always-open sections, one continuous scroll — used
+  // during registration. 'accordion': the same sections collapsed into
+  // independently-expandable cards — used on the standalone My Profile page,
+  // so a returning user can glance at every section and drill into just one
+  // instead of scrolling a long form. Either way all fields share one piece
+  // of state and one Save action; accordion mode only changes presentation.
+  mode?: 'wizard' | 'accordion'
 }
 
-export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: BuyerProfileFormProps) {
+type ValuesMethod = 'choose' | 'quiz' | 'manual'
+
+export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel, mode = 'wizard' }: BuyerProfileFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -35,6 +47,10 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
   const [valuesStatement, setValuesStatement] = useState(existing?.values_statement ?? '')
   const [errors, setErrors]             = useState<Record<string, string>>({})
 
+  // First time through (no saved values yet), lead with the quiz-or-pick
+  // chooser; editing an existing profile skips straight to the familiar grid.
+  const [valuesMethod, setValuesMethod] = useState<ValuesMethod>(values.length > 0 ? 'manual' : 'choose')
+
   function toggleIndustry(ind: string) {
     setIndustries(prev => prev.includes(ind) ? prev.filter(x => x !== ind) : [...prev, ind])
   }
@@ -47,6 +63,14 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
           ? (toast.error('Choose up to 5 values'), prev)
           : [...prev, v]
     )
+  }
+
+  function handleQuizConfirm(quizValues: string[], statementDraft: string) {
+    setValues(quizValues)
+    // Never clobber a statement the person already wrote — only ever fills
+    // in the gap right after a first-time quiz leaves it blank.
+    setValuesStatement((prev: string) => prev.trim() ? prev : statementDraft)
+    setValuesMethod('manual')
   }
 
   function validate(): boolean {
@@ -126,6 +150,174 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
     />
   )
 
+  const accordion = mode === 'accordion'
+  // In wizard mode each section is an always-open .card with its own small
+  // eyebrow label; in accordion mode AccordionCard's own title already names
+  // the section, so the inline eyebrow would just repeat it.
+  const sectionEyebrow = (text: string) => !accordion && (
+    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', marginBottom: 14 }}>{text}</div>
+  )
+
+  const aboutYouBody = (
+    <>
+      {sectionEyebrow('About You')}
+      <div style={{ marginBottom: 16 }}>
+        {fieldLabel('Your Background *')}
+        {textArea(background, setBackground, 'Describe your professional background — what you\'ve built, led, or operated. Be specific about relevant experience.', 3)}
+        <Err field="background" />
+      </div>
+      <div>
+        {fieldLabel('What You\'re Looking For *')}
+        {textArea(lookingFor, setLookingFor, 'What kind of business are you trying to find? What matters most to you in an acquisition?', 3)}
+        <Err field="lookingFor" />
+      </div>
+    </>
+  )
+
+  const acquisitionBody = (
+    <>
+      {sectionEyebrow('Acquisition Criteria')}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div>
+          {fieldLabel('Minimum Budget *')}
+          {textInput(priceMin, setPriceMin, 'e.g. 500000')}
+          <div style={{ fontSize: '0.68rem', color: '#6a6a6a', marginTop: 4 }}>Enter in dollars, no commas needed</div>
+          <Err field="priceMin" />
+        </div>
+        <div>
+          {fieldLabel('Maximum Budget *')}
+          {textInput(priceMax, setPriceMax, 'e.g. 3000000')}
+          <Err field="priceMax" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div>
+          {fieldLabel('Location Preference *')}
+          <select
+            value={location} onChange={e => setLocation(e.target.value)}
+            style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: location ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
+          >
+            <option value="">Select preference</option>
+            {BUYER_LOCATION_PREFERENCES.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <Err field="location" />
+        </div>
+        <div>
+          {fieldLabel('Years of Experience *')}
+          <select
+            value={experience} onChange={e => setExperience(e.target.value)}
+            style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: experience ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
+          >
+            <option value="">Select range</option>
+            {['1–3 years','3–5 years','5–10 years','10–15 years','15–20 years','20+ years'].map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <Err field="experience" />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        {fieldLabel('Funding Source *')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {FUNDING_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setFunding(opt.value)}
+              style={{
+                padding: '10px 8px', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit',
+                border: `1px solid ${funding === opt.value ? '#A05500' : '#2e2e2e'}`,
+                background: funding === opt.value ? 'rgba(160,85,0,0.1)' : '#141414',
+                color: funding === opt.value ? '#C46A00' : '#929292',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: 3 }}>{opt.label}</div>
+              <div style={{ fontSize: '0.65rem', lineHeight: 1.3 }}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+        <Err field="funding" />
+      </div>
+
+      <div>
+        {fieldLabel(`Target Industries * — ${industries.length} selected`)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 8 }}>
+          {INDUSTRIES.map(ind => (
+            <button
+              key={ind}
+              type="button"
+              onClick={() => toggleIndustry(ind)}
+              style={{
+                padding: '8px', borderRadius: 6, fontSize: '0.72rem', cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit',
+                border: `1px solid ${industries.includes(ind) ? '#A05500' : '#2e2e2e'}`,
+                background: industries.includes(ind) ? 'rgba(160,85,0,0.1)' : '#141414',
+                color: industries.includes(ind) ? '#C46A00' : '#929292',
+              }}
+            >
+              {ind}
+            </button>
+          ))}
+        </div>
+        <Err field="industries" />
+      </div>
+    </>
+  )
+
+  const manualValuesGrid = (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        {fieldLabel(`Core Values * — ${values.length}/5 selected`)}
+        <button type="button" onClick={() => setValuesMethod('quiz')} className="btn-ghost btn-sm">
+          {values.length > 0 ? 'Retake the Values Quiz' : 'Take the Quiz Instead →'}
+        </button>
+      </div>
+      {/* Include any already-saved values not in the current picklist (e.g.
+          older data using different wording/casing) so they still show up
+          as selected and can be seen and deselected, instead of silently
+          counting toward the 5-value cap while appearing unselected. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 8 }}>
+        {[...ALL_VALUES, ...values.filter(v => !ALL_VALUES.includes(v))].map(v => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => toggleValue(v)}
+            style={{
+              padding: '8px 10px', borderRadius: 6, fontSize: '0.75rem', cursor: 'pointer', textAlign: 'center', lineHeight: 1.3, fontFamily: 'inherit',
+              border: `1px solid ${values.includes(v) ? '#A05500' : '#2e2e2e'}`,
+              background: values.includes(v) ? 'rgba(160,85,0,0.1)' : '#141414',
+              color: values.includes(v) ? '#C46A00' : '#929292',
+            }}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      <Err field="values" />
+
+      <div style={{ marginTop: 16 }}>
+        {fieldLabel('Values Statement *')}
+        {textArea(valuesStatement, setValuesStatement, "What drives you as a buyer? What does it mean to you to own a business? What kind of legacy do you want to build?", 4)}
+        <div style={{ fontSize: '0.68rem', color: '#6a6a6a', marginTop: 4 }}>{valuesStatement.length} characters · minimum 30</div>
+        <Err field="valuesStatement" />
+      </div>
+    </>
+  )
+
+  const valuesBody = (
+    <>
+      {sectionEyebrow('Your Values')}
+      {valuesMethod === 'choose' ? (
+        <ValuesMethodChooser onChooseQuiz={() => setValuesMethod('quiz')} onChoosePick={() => setValuesMethod('manual')} />
+      ) : valuesMethod === 'quiz' ? (
+        <ValuesQuiz audience="buyer" onConfirm={handleQuizConfirm} onCancel={() => setValuesMethod(values.length > 0 ? 'manual' : 'choose')} />
+      ) : manualValuesGrid}
+    </>
+  )
+
   return (
     <div style={{ maxWidth: 720 }}>
       <div style={{ marginBottom: 24 }}>
@@ -137,154 +329,43 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
         </p>
       </div>
 
-      {/* Background */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', marginBottom: 14 }}>About You</div>
+      {accordion ? (
+        <>
+          <AccordionCard
+            title="About You"
+            summary={background ? `${background.slice(0, 80)}${background.length > 80 ? '…' : ''}` : 'Not set yet'}
+            forceOpen={!!(errors.background || errors.lookingFor)}
+          >
+            {aboutYouBody}
+          </AccordionCard>
+          <AccordionCard
+            title="Acquisition Criteria"
+            summary={industries.length ? `${industries.length} target ${industries.length === 1 ? 'industry' : 'industries'}, ${location || 'no location set'}` : 'Not set yet'}
+            forceOpen={!!(errors.priceMin || errors.priceMax || errors.industries || errors.location || errors.funding || errors.experience)}
+          >
+            {acquisitionBody}
+          </AccordionCard>
+          <AccordionCard
+            title="Your Values"
+            summary={values.length ? values.join(', ') : 'Not set yet'}
+            forceOpen={!!(errors.values || errors.valuesStatement)}
+          >
+            {valuesBody}
+          </AccordionCard>
+        </>
+      ) : (
+        <>
+          <div className="card" style={{ marginBottom: 16 }}>{aboutYouBody}</div>
+          <div className="card" style={{ marginBottom: 16 }}>{acquisitionBody}</div>
+          <div className="card" style={{ marginBottom: 24 }}>{valuesBody}</div>
+        </>
+      )}
 
-        <div style={{ marginBottom: 16 }}>
-          {fieldLabel('Your Background *')}
-          {textArea(background, setBackground, 'Describe your professional background — what you\'ve built, led, or operated. Be specific about relevant experience.', 3)}
-          <Err field="background" />
-        </div>
-
-        <div>
-          {fieldLabel('What You\'re Looking For *')}
-          {textArea(lookingFor, setLookingFor, 'What kind of business are you trying to find? What matters most to you in an acquisition?', 3)}
-          <Err field="lookingFor" />
-        </div>
-      </div>
-
-      {/* Acquisition criteria */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', marginBottom: 14 }}>Acquisition Criteria</div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            {fieldLabel('Minimum Budget *')}
-            {textInput(priceMin, setPriceMin, 'e.g. 500000')}
-            <div style={{ fontSize: '0.68rem', color: '#6a6a6a', marginTop: 4 }}>Enter in dollars, no commas needed</div>
-            <Err field="priceMin" />
-          </div>
-          <div>
-            {fieldLabel('Maximum Budget *')}
-            {textInput(priceMax, setPriceMax, 'e.g. 3000000')}
-            <Err field="priceMax" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            {fieldLabel('Location Preference *')}
-            <select
-              value={location} onChange={e => setLocation(e.target.value)}
-              style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: location ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
-            >
-              <option value="">Select preference</option>
-              {BUYER_LOCATION_PREFERENCES.map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <Err field="location" />
-          </div>
-          <div>
-            {fieldLabel('Years of Experience *')}
-            <select
-              value={experience} onChange={e => setExperience(e.target.value)}
-              style={{ width: '100%', background: '#141414', border: '1px solid #2e2e2e', borderRadius: 6, padding: '10px 14px', fontSize: '0.88rem', color: experience ? '#fff' : '#6a6a6a', outline: 'none', fontFamily: 'inherit', appearance: 'none' }}
-            >
-              <option value="">Select range</option>
-              {['1–3 years','3–5 years','5–10 years','10–15 years','15–20 years','20+ years'].map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            <Err field="experience" />
-          </div>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          {fieldLabel('Funding Source *')}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {FUNDING_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setFunding(opt.value)}
-                style={{
-                  padding: '10px 8px', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit',
-                  border: `1px solid ${funding === opt.value ? '#A05500' : '#2e2e2e'}`,
-                  background: funding === opt.value ? 'rgba(160,85,0,0.1)' : '#141414',
-                  color: funding === opt.value ? '#C46A00' : '#929292',
-                }}
-              >
-                <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: 3 }}>{opt.label}</div>
-                <div style={{ fontSize: '0.65rem', lineHeight: 1.3 }}>{opt.desc}</div>
-              </button>
-            ))}
-          </div>
-          <Err field="funding" />
-        </div>
-
-        <div>
-          {fieldLabel(`Target Industries * — ${industries.length} selected`)}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 8 }}>
-            {INDUSTRIES.map(ind => (
-              <button
-                key={ind}
-                type="button"
-                onClick={() => toggleIndustry(ind)}
-                style={{
-                  padding: '8px', borderRadius: 6, fontSize: '0.72rem', cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit',
-                  border: `1px solid ${industries.includes(ind) ? '#A05500' : '#2e2e2e'}`,
-                  background: industries.includes(ind) ? 'rgba(160,85,0,0.1)' : '#141414',
-                  color: industries.includes(ind) ? '#C46A00' : '#929292',
-                }}
-              >
-                {ind}
-              </button>
-            ))}
-          </div>
-          <Err field="industries" />
-        </div>
-      </div>
-
-      {/* Values */}
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#929292', marginBottom: 14 }}>Your Values</div>
-
-        <div style={{ marginBottom: 16 }}>
-          {fieldLabel(`Core Values * — ${values.length}/5 selected`)}
-          {/* Include any already-saved values not in the current picklist (e.g.
-              older data using different wording/casing) so they still show up
-              as selected and can be seen and deselected, instead of silently
-              counting toward the 5-value cap while appearing unselected. */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7, marginTop: 8 }}>
-            {[...ALL_VALUES, ...values.filter(v => !ALL_VALUES.includes(v))].map(v => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => toggleValue(v)}
-                style={{
-                  padding: '8px 10px', borderRadius: 6, fontSize: '0.75rem', cursor: 'pointer', textAlign: 'center', lineHeight: 1.3, fontFamily: 'inherit',
-                  border: `1px solid ${values.includes(v) ? '#A05500' : '#2e2e2e'}`,
-                  background: values.includes(v) ? 'rgba(160,85,0,0.1)' : '#141414',
-                  color: values.includes(v) ? '#C46A00' : '#929292',
-                }}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <Err field="values" />
-        </div>
-
-        <div>
-          {fieldLabel('Values Statement *')}
-          {textArea(valuesStatement, setValuesStatement, "What drives you as a buyer? What does it mean to you to own a business? What kind of legacy do you want to build?", 4)}
-          <div style={{ fontSize: '0.68rem', color: '#6a6a6a', marginTop: 4 }}>{valuesStatement.length} characters · minimum 30</div>
-          <Err field="valuesStatement" />
-        </div>
-      </div>
-
+      {/* Hidden while the quiz is active: clicking Save mid-quiz would fail
+          validation on a "values" field that isn't currently rendered (the
+          manual grid is swapped out for the quiz), leaving no visible error
+          for the user to act on. The quiz has its own Cancel to back out. */}
+      {valuesMethod !== 'quiz' && (
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
           type="button"
@@ -295,6 +376,7 @@ export function BuyerProfileForm({ existing, fullName, onSubmit, submitLabel }: 
           {isPending ? 'Saving…' : submitLabel ?? (existing ? 'Save Changes ✓' : 'Save Profile & Start Discovering →')}
         </button>
       </div>
+      )}
     </div>
   )
 }

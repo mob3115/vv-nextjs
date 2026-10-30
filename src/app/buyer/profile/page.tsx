@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AppShell } from '@/components/shared/AppShell'
+import { AccordionCard } from '@/components/shared/AccordionCard'
 import { BuyerProfileForm } from '@/components/buyer/BuyerProfileForm'
 import { BUYER_NAV } from '@/lib/nav'
 
@@ -36,8 +37,23 @@ export default async function BuyerProfilePage() {
         </div>
       </div>
 
-      <div className="page-body">
-        <BuyerProfileForm existing={buyer} fullName={profile.full_name} />
+      <div className="page-body" style={{ maxWidth: 720 }}>
+        <AccordionCard title="Personal Info" summary={`${profile.full_name} · ${profile.email}`}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#929292', marginBottom: 4 }}>Full Name</div>
+              <div style={{ fontSize: '0.88rem', color: '#fff' }}>{profile.full_name}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#929292', marginBottom: 4 }}>Email</div>
+              <div style={{ fontSize: '0.88rem', color: '#fff' }}>{profile.email}</div>
+            </div>
+            <p style={{ fontSize: '0.72rem', color: '#6a6a6a', margin: 0 }}>
+              Changing your name or email isn&apos;t supported here yet — contact support if you need either updated.
+            </p>
+          </div>
+        </AccordionCard>
+        <BuyerProfileForm existing={buyer} fullName={profile.full_name} mode="accordion" />
       </div>
     </AppShell>
   )
