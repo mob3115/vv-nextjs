@@ -53,6 +53,18 @@
   .page-header { padding: 28px 36px 20px; border-bottom: 1px solid #2e2e2e; background: #1E1E1E; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .page-body { padding: 32px 36px; }
 
+  /* Accordion card — the grid-rows 0fr/1fr trick animates to an unknown
+     content height with no JS measurement, unlike max-height. */
+  .accordion-card { background: #242424; border: 1px solid #2e2e2e; border-radius: 12px; overflow: hidden; }
+  .accordion-card-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit; }
+  .accordion-card-header:hover { background: rgba(255,255,255,0.02); }
+  .accordion-card-chevron { flex-shrink: 0; transition: transform 0.2s ease; color: #929292; }
+  .accordion-card.open .accordion-card-chevron { transform: rotate(180deg); }
+  .accordion-card-body-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.25s ease; }
+  .accordion-card.open .accordion-card-body-wrap { grid-template-rows: 1fr; }
+  .accordion-card-body-inner { overflow: hidden; }
+  .accordion-card-body { padding: 0 24px 24px; border-top: 1px solid #2e2e2e; padding-top: 20px; }
+
   .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
 
   .progress-bar { height: 4px; background: #2e2e2e; border-radius: 99px; overflow: hidden; }

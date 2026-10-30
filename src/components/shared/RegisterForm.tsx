@@ -16,8 +16,13 @@ type Role = 'buyer' | 'seller' | 'dual'
 // afterward: BuyerProfileForm / ListingForm are embedded directly (in
 // "collect" mode — see their onSubmit prop) and their payload is submitted
 // together with account creation via registerBuyerAction/registerSellerAction.
-const BUYER_STEPS = ['Your Role', 'Account', 'Your Profile', 'Done']
-const SELLER_STEPS = ['Your Role', 'Account', 'List Your Business', 'Done']
+//
+// The Role screen (internal step 0) is a quick, unlabeled intro rather than
+// a numbered step — it's a single click, not a form to fill in. The numbered
+// bar only covers the substantive part of the flow: Account, then Your
+// Profile/Your Business, then Done, so "step 1 of 3" means something.
+const BUYER_STEPS = ['Account', 'Your Profile', 'Done']
+const SELLER_STEPS = ['Account', 'List Your Business', 'Done']
 
 export function RegisterForm() {
   const [step, setStep] = useState(0)
@@ -86,6 +91,10 @@ export function RegisterForm() {
   }
 
   const stepLabels = role === 'seller' ? SELLER_STEPS : BUYER_STEPS
+  // Internal `step` values are 0 (role, unlabeled) / 1 / 2 / 3 — the bar
+  // itself only shows 3 dots (Account / Profile-or-Listing / Done), so shift
+  // by one to map step 1/2/3 onto bar positions 0/1/2.
+  const barStep = step - 1
 
   // Step bar
   const StepBar = () => (
@@ -94,28 +103,27 @@ export function RegisterForm() {
         <div key={i} className="flex items-center flex-1 last:flex-none">
           <div className="flex flex-col items-center">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all ${
-              i < step ? 'bg-orange text-white' :
-              i === step ? 'border-2 border-orange text-orange bg-black-card' :
+              i < barStep ? 'bg-orange text-white' :
+              i === barStep ? 'border-2 border-orange text-orange bg-black-card' :
               'bg-black-hover border border-grey-border text-grey-mid'
             }`}>
-              {i < step ? '✓' : i + 1}
+              {i < barStep ? '✓' : i + 1}
             </div>
-            <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block ${i === step ? 'text-white' : 'text-grey-mid'}`}>
+            <span className={`text-[9px] uppercase tracking-widest mt-1 hidden sm:block ${i === barStep ? 'text-white' : 'text-grey-mid'}`}>
               {label}
             </span>
           </div>
           {i < stepLabels.length - 1 && (
-            <div className={`flex-1 h-0.5 mx-1 ${i < step ? 'bg-orange' : 'bg-grey-border'}`} />
+            <div className={`flex-1 h-0.5 mx-1 ${i < barStep ? 'bg-orange' : 'bg-grey-border'}`} />
           )}
         </div>
       ))}
     </div>
   )
 
-  // ---- Step 0: Role ----
+  // ---- Step 0: Role (quick intro, not a numbered step) ----
   if (step === 0) return (
     <div>
-      <StepBar />
       <h2 className="text-xl font-bold text-white mb-1.5">How are you joining V+V?</h2>
       <p className="text-sm text-grey-dark mb-6">You can update your role anytime after registration.</p>
       <div className="grid grid-cols-3 gap-3 mb-6">

@@ -138,6 +138,56 @@ audit logging must never break the action it's attached to. `ADMIN`,
 already has colors for them) but nothing emits them yet, since there's no
 real admin write-action or rate limiting in the app to log.
 
+## 4c. Values Discovery Quiz
+
+Both the onboarding wizard and the standalone My Profile/My Listing pages
+offer two ways to pick a buyer's or seller's up-to-5 `values`: the original
+manual grid, or a ranked-choice quiz (`src/components/values/ValuesQuiz.tsx`)
+that reveals a top-5 from 15 scenario questions (12 four-option rank
+questions scored 5/3/1/0, 3 eight-option pick-one questions scored a flat
+5 — `src/lib/valuesQuizScoring.ts`, pure and unit-tested). The chooser
+(`ValuesMethodChooser.tsx`) only appears the first time through, when
+`values` is still empty; editing an existing profile/listing goes straight
+to the familiar grid with a "Retake the Values Quiz" link next to it.
+
+Quiz option values are the literal `CORE_VALUES` label strings (not a
+separate id/slug scheme) — `src/lib/valuesQuizData.ts`'s two question banks
+and per-value blurbs were ported from standalone reference quizzes with
+every option re-keyed to match `CORE_VALUES` exactly, verified by a test
+that fails if any quiz option ever drifts from the canonical list. A quiz
+result is therefore already a valid `values: string[]`; `upsertBuyerProfile`
+/ `createSellerListing` / `updateSellerListing` needed zero changes to
+accept it. Quiz rank is display-only — `valuesCompatibility()` in
+`matching.ts` treats values as an unordered set and was deliberately left
+alone; feeding rank into the algorithm would be a real scoring change
+nobody asked for. On confirm, if `valuesStatement` is still empty, a draft
+assembled from the top 3 values' blurbs pre-fills it (never overwrites
+text the user already wrote); the manual grid is then shown pre-checked
+with the quiz's picks so they're still freely adjustable before saving.
+
+Registration's step bar was relabeled from 4 steps to 3 (Account → Your
+Profile/Your Business → Done) — the Role-picker screen is now a quick
+unlabeled intro rather than a numbered step, since it's a single click, not
+a form.
+
+## 4d. My Profile / My Listing — accordion mode
+
+`BuyerProfileForm` and `ListingForm` both take a `mode: 'wizard' | 'accordion'`
+prop (default `'wizard'`, i.e. today's registration-embedded behavior is
+unchanged). In `'accordion'` mode, the same section JSX (extracted into
+local consts/render-functions, not duplicated) renders inside
+`AccordionCard` (`src/components/shared/AccordionCard.tsx` — a from-scratch
+collapsible `.card`, CSS-only expand via a `grid-template-rows: 0fr → 1fr`
+transition, no JS height measurement) instead of always-open plain
+`.card`s, with one shared Save action instead of per-step Next/Back. Since
+collapsed content stays mounted (just visually clipped), each card accepts
+a `forceOpen` prop driven by that section's validation errors, so a failed
+Save always lands the user on a visibly-open card instead of a hidden one.
+`/buyer/profile` and `/seller/listing` (existing-listing case) now render
+in accordion mode; seller's old separate `?edit=true` step-wizard route for
+an existing listing was removed — the accordion page itself is both the
+glanceable overview and the in-place editor.
+
 ## 5. Application structure
 
 ```
@@ -145,8 +195,9 @@ src/app/            Route segments (App Router). buyer/, seller/, admin/, auth/
 src/lib/actions/    Server Actions — auth.ts, marketplace.ts (listings, profiles,
                     swipes, matches, NDAs), messaging.ts, vault.ts, shared.ts
 src/lib/            matching.ts, validations.ts (Zod), constants.ts, page-auth.ts,
-                    nav.ts, nda-template.ts, icons.tsx, utils.ts
-src/components/     buyer/, seller/, chat/, nda/, vault/, shared/, ui/
+                    nav.ts, nda-template.ts, icons.tsx, utils.ts,
+                    valuesQuizData.ts, valuesQuizScoring.ts
+src/components/     buyer/, seller/, chat/, nda/, vault/, shared/, ui/, values/
 ```
 
 **Page pattern.** Nearly every page under `buyer/`, `seller/`, and `admin/`
