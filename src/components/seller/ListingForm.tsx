@@ -464,11 +464,9 @@ export function ListingForm({ existing, fullName, onSubmit, submitLabel, mode = 
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         {label(`Core Values * — ${values.length}/5 selected`)}
-        {values.length > 0 && (
-          <button type="button" onClick={() => setValuesMethod('quiz')} className="btn-ghost btn-sm">
-            Retake the Values Quiz
-          </button>
-        )}
+        <button type="button" onClick={() => setValuesMethod('quiz')} className="btn-ghost btn-sm">
+          {values.length > 0 ? 'Retake the Values Quiz' : 'Take the Quiz Instead →'}
+        </button>
       </div>
       {/* Include any already-saved values not in the current picklist (e.g.
           older data using different wording/casing) so they still show up
